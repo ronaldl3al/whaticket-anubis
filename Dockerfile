@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y wget gnupg ca-certificates postgresql-c
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROME_BIN=/usr/bin/google-chrome-stable
-ENV CHROME_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage
+ENV CHROME_ARGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage"
 ENV NODE_ENV=production
 ENV PORT=8080
 
