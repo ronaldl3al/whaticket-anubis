@@ -50,16 +50,18 @@ ENV PORT=8080
 
 WORKDIR /app/backend
 
+# dist/ already contains compiled migrations, seeds, and config
 COPY --from=backend-builder /app/backend/dist ./dist
 COPY --from=backend-builder /app/backend/node_modules ./node_modules
 COPY --from=backend-builder /app/backend/package.json ./package.json
 COPY --from=backend-builder /app/backend/public ./public
 COPY --from=backend-builder /app/backend/.sequelizerc ./.sequelizerc
-COPY --from=backend-builder /app/backend/src/database/migrations ./src/database/migrations
-COPY --from=backend-builder /app/backend/src/database/seeds ./src/database/seeds
 
 # Frontend served from backend/public/frontend
 COPY --from=frontend-builder /app/frontend/build ./public/frontend
+
+# Create public dir for media uploads (whatsapp images, audio, etc.)
+RUN mkdir -p ./public
 
 EXPOSE 8080
 
