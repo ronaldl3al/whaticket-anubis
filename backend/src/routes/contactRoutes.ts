@@ -35,6 +35,12 @@ contactRoutes.post(
   ContactController.mergeDuplicates
 );
 
+contactRoutes.post(
+  "/contacts/clean-invalid",
+  isAuth,
+  ContactController.deleteInvalidContacts
+);
+
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 
 contactRoutes.get("/contacts/:contactId", isAuth, ContactController.show);

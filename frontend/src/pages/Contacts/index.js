@@ -104,6 +104,7 @@ const Contacts = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false);
   const [confirmMergeOpen, setConfirmMergeOpen] = useState(false);
+  const [confirmCleanInvalidOpen, setConfirmCleanInvalidOpen] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
@@ -272,6 +273,22 @@ const Contacts = () => {
     }
   };
 
+  const handleCleanInvalidContacts = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.post("/contacts/clean-invalid");
+      toast.success(
+        `Limpieza completada: se eliminaron ${data.deletedCount || 0} contactos con números extraños o inválidos`
+      );
+      dispatch({ type: "RESET" });
+      setPageNumber(1);
+      setLoading(false);
+    } catch (err) {
+      toastError(err);
+      setLoading(false);
+    }
+  };
+
   const handleDeleteAllContacts = async () => {
     try {
       setLoading(true);
@@ -338,6 +355,14 @@ const Contacts = () => {
       >
         ¿Desea buscar y fusionar contactos duplicados? Se unificarán números con formatos locales (0424... / 424...) e internacionales (58424...), así como identificadores LID de WhatsApp con sus números celulares reales. Se reasignarán todos los tickets y mensajes sin perder ninguna información.
       </ConfirmationModal>
+      <ConfirmationModal
+        title="Eliminar Números Inválidos o Extraños"
+        open={confirmCleanInvalidOpen}
+        onClose={setConfirmCleanInvalidOpen}
+        onConfirm={handleCleanInvalidContacts}
+      >
+        ¿Está seguro de que desea eliminar todos los contactos sincronizados con números extraños, LIDs de 15 dígitos o que no correspondan a un teléfono celular real? Se conservarán intactos todos los contactos que posean números celulares reales. Esta acción no se puede deshacer.
+      </ConfirmationModal>
       <MainHeader>
         <Title>{i18n.t("contacts.title")}</Title>
         <MainHeaderButtonsWrapper>
@@ -382,6 +407,13 @@ const Contacts = () => {
             onClick={() => setConfirmMergeOpen(true)}
           >
             Fusionar Duplicados
+          </Button>
+          <Button
+            variant="contained"
+            style={{ backgroundColor: "#d32f2f", color: "#fff" }}
+            onClick={() => setConfirmCleanInvalidOpen(true)}
+          >
+            Eliminar Números Inválidos
           </Button>
           <Button
             variant="contained"

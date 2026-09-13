@@ -19,6 +19,7 @@ import {
   ImportGoogleContactsService
 } from "../services/ContactServices/GoogleContactsService";
 import MergeDuplicateContactsService from "../services/ContactServices/MergeDuplicateContactsService";
+import DeleteInvalidContactsService from "../services/ContactServices/DeleteInvalidContactsService";
 
 type IndexQuery = {
   searchParam: string;
@@ -230,5 +231,13 @@ export const mergeDuplicates = async (
   res: Response
 ): Promise<Response> => {
   const result = await MergeDuplicateContactsService();
+  return res.status(200).json(result);
+};
+
+export const deleteInvalidContacts = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const result = await DeleteInvalidContactsService();
   return res.status(200).json(result);
 };

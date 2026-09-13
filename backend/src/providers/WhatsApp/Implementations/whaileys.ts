@@ -1349,17 +1349,53 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
           whereContact[Op.or] = orList;
         }
 
+        const candidateName =
+          chat.name ||
+          (chat as any).displayName ||
+          (chat as any).subject ||
+          wbot.store?.contacts?.[rawJid]?.name ||
+          wbot.store?.contacts?.[normalizedJid]?.name ||
+          (cleanNumber ? wbot.store?.contacts?.[`${cleanNumber}@s.whatsapp.net`]?.name : "") ||
+          wbot.store?.contacts?.[rawJid]?.notify ||
+          wbot.store?.contacts?.[normalizedJid]?.notify ||
+          "";
+
+        const isRegistered = isValidContactName(candidateName, cleanNumber, resolvedLid);
+        const resolvedChatName = isRegistered
+          ? candidateName.trim()
+          : (isRealPhoneNumber(cleanNumber) ? cleanNumber : (cleanNumber || rawJid));
+
         let contact = await Contact.findOne({ where: whereContact });
         if (!contact) {
-          const isRegistered = isValidContactName(chat.name, cleanNumber, resolvedLid);
-          const chatName = isRegistered ? chat.name.trim() : (isRealPhoneNumber(cleanNumber) ? cleanNumber : (cleanNumber || rawJid));
           contact = await Contact.create({
-            name: chatName,
+            name: resolvedChatName,
             number: cleanNumber || userPart,
             lid: resolvedLid,
             isGroup
           });
           getIO().emit("contact", { action: "create", contact });
+        } else {
+          const updateData: any = {};
+          if (isRegistered && contact.name !== candidateName.trim()) {
+            updateData.name = candidateName.trim();
+          } else if (!isRegistered && (!isValidContactName(contact.name, contact.number, contact.lid) || isLid(contact.name))) {
+            if (isRealPhoneNumber(cleanNumber) && contact.name !== cleanNumber) {
+              updateData.name = cleanNumber;
+            }
+          }
+
+          if (isRealPhoneNumber(cleanNumber) && (!isRealPhoneNumber(contact.number) || isLid(contact.number))) {
+            updateData.number = cleanNumber;
+          }
+
+          if (resolvedLid && contact.lid !== resolvedLid) {
+            updateData.lid = resolvedLid;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await contact.update(updateData);
+            getIO().emit("contact", { action: "update", contact });
+          }
         }
 
         let ticket = await Ticket.findOne({
@@ -1453,6 +1489,13 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
   (wbot.ev as any).on("chats.set", async ({ chats: newChats }: any) => {
     if (newChats && newChats.length > 0) {
       await syncChats(newChats);
+    }
+  });
+
+  (wbot.ev as any).on("chats.update", async (updates: any[]) => {
+    if (Array.isArray(updates) && updates.length > 0) {
+      const fullChats = updates.map(u => (wbot.store?.chats?.get ? wbot.store.chats.get(u.id) : u) || u);
+      await syncChats(fullChats);
     }
   });
 
@@ -1832,10 +1875,37 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
               await syncContacts(allContacts);
             }
           }
+          if (wbot.store?.chats) {
+            const allChats = typeof wbot.store.chats.all === "function"
+              ? wbot.store.chats.all()
+              : (wbot.store.chats.toJSON ? wbot.store.chats.toJSON() : []);
+            if (allChats && allChats.length > 0) {
+              logger.info(
+                `[SYNC] Post-connect syncing ${allChats.length} chats from store on session ${sessionId}`
+              );
+              await syncChats(allChats);
+            }
+          }
         } catch (e) {
-          logger.error({ info: "Error syncing store contacts post-connect", err: e });
+          logger.error({ info: "Error syncing store contacts/chats post-connect", err: e });
         }
-      }, 4000);
+      }, 3000);
+
+      setTimeout(async () => {
+        try {
+          if (wbot.store?.chats) {
+            const allChats = typeof wbot.store.chats.all === "function"
+              ? wbot.store.chats.all()
+              : (wbot.store.chats.toJSON ? wbot.store.chats.toJSON() : []);
+            if (allChats && allChats.length > 0) {
+              logger.info(
+                `[SYNC] Second-pass post-connect syncing ${allChats.length} chats from store on session ${sessionId}`
+              );
+              await syncChats(allChats);
+            }
+          }
+        } catch (e) {}
+      }, 10000);
     }
 
     if (qr !== undefined) {
@@ -2267,12 +2337,12 @@ const getProfilePicUrl = async (
 
 const getContacts = async (sessionId: number): Promise<ProviderContact[]> => {
   const wbot = getWbot(sessionId);
+  const contactMap = new Map<string, ProviderContact>();
 
-  const contacts: ProviderContact[] = [];
-
+  // 1. Extract from wbot.store.contacts
   if (wbot.store?.contacts) {
     Object.values(wbot.store.contacts).forEach(contact => {
-      if (!contact.id || contact.id.includes("@g.us") || contact.id === "status@broadcast") {
+      if (!contact.id || contact.id.includes("@g.us") || contact.id === "status@broadcast" || contact.id.endsWith("newsletter")) {
         return;
       }
       const isUser = isJidUser(contact.id);
@@ -2293,7 +2363,7 @@ const getContacts = async (sessionId: number): Promise<ProviderContact[]> => {
         ? contact.name?.trim() || ""
         : "";
 
-      contacts.push({
+      contactMap.set(cleanPhone, {
         id: `${cleanPhone}@s.whatsapp.net`,
         number: cleanPhone,
         name: registeredName || cleanPhone,
@@ -2303,7 +2373,89 @@ const getContacts = async (sessionId: number): Promise<ProviderContact[]> => {
     });
   }
 
-  return contacts;
+  // 2. Extract from wbot.store.chats (where user conversation names such as cliente0000 reside)
+  if (wbot.store?.chats) {
+    const allChats = typeof wbot.store.chats.all === "function"
+      ? wbot.store.chats.all()
+      : (wbot.store.chats.toJSON ? wbot.store.chats.toJSON() : []);
+
+    for (const chat of allChats) {
+      if (!chat || !chat.id || chat.id.includes("@g.us") || chat.id === "status@broadcast" || chat.id.endsWith("newsletter")) {
+        continue;
+      }
+
+      const rawJid = chat.id;
+      const normalizedJid = jidNormalizedUser(rawJid);
+      const userPart = normalizedJid.split("@")[0];
+      let phone = userPart;
+
+      if (isLid(rawJid) || isLid(userPart)) {
+        const fromStore = resolveLidFromStores(userPart);
+        if (fromStore?.phone) {
+          phone = fromStore.phone;
+        } else {
+          continue;
+        }
+      }
+
+      if (!phone || !isRealPhoneNumber(phone)) continue;
+
+      const cleanPhone = normalizePhoneNumber(phone);
+
+      const candidateName =
+        chat.name ||
+        (chat as any).displayName ||
+        (chat as any).subject ||
+        wbot.store?.contacts?.[rawJid]?.name ||
+        wbot.store?.contacts?.[normalizedJid]?.name ||
+        (cleanPhone ? wbot.store?.contacts?.[`${cleanPhone}@s.whatsapp.net`]?.name : "") ||
+        "";
+
+      const isRegistered = isValidContactName(candidateName, cleanPhone);
+      const registeredName = isRegistered ? candidateName.trim() : "";
+
+      const existing = contactMap.get(cleanPhone);
+      if (existing) {
+        if (registeredName && (!existing.name || existing.name === cleanPhone || !isValidContactName(existing.name, cleanPhone))) {
+          existing.name = registeredName;
+        }
+      } else {
+        contactMap.set(cleanPhone, {
+          id: `${cleanPhone}@s.whatsapp.net`,
+          number: cleanPhone,
+          name: registeredName || cleanPhone,
+          pushname: (chat as any).notify || "",
+          isGroup: false
+        });
+      }
+    }
+  }
+
+  // 3. Extract from messages store if any extra chats exist
+  if (wbot.store?.messages) {
+    for (const remoteJid of Object.keys(wbot.store.messages)) {
+      if (!remoteJid || remoteJid.includes("@g.us") || remoteJid === "status@broadcast" || remoteJid.endsWith("newsletter")) continue;
+      if (remoteJid.endsWith("@s.whatsapp.net")) {
+        const userPart = remoteJid.split("@")[0];
+        if (isRealPhoneNumber(userPart)) {
+          const cleanPhone = normalizePhoneNumber(userPart);
+          if (!contactMap.has(cleanPhone)) {
+            const contactEntry = wbot.store?.contacts?.[remoteJid];
+            const registeredName = isValidContactName(contactEntry?.name, cleanPhone) ? contactEntry?.name?.trim() : "";
+            contactMap.set(cleanPhone, {
+              id: `${cleanPhone}@s.whatsapp.net`,
+              number: cleanPhone,
+              name: registeredName || cleanPhone,
+              pushname: contactEntry?.notify || "",
+              isGroup: false
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(contactMap.values());
 };
 
 const sendSeen = async (sessionId: number, chatId: string): Promise<void> => {
