@@ -2,6 +2,13 @@ import { Op } from "sequelize";
 import Contact from "../../models/Contact";
 import { getIO } from "../../libs/socket";
 import { logger } from "../../utils/logger";
+import {
+  isLid,
+  isRealPhoneNumber,
+  normalizePhoneNumber,
+  isValidContactName
+} from "../../helpers/PhoneNumberUtils";
+import { resolveLidFromStores } from "../../providers/WhatsApp/Implementations/whaileys";
 
 const GOOGLE_CSV_HEADER =
   "First Name,Middle Name,Last Name,Phonetic First Name,Phonetic Middle Name,Phonetic Last Name,Name Prefix,Name Suffix,Nickname,File As,Organization Name,Organization Title,Organization Department,Birthday,Notes,Photo,Labels,Phone 1 - Label,Phone 1 - Value";
@@ -27,21 +34,27 @@ export const ExportGoogleContactsService = async (
   for (const contact of contacts) {
     if (contact.isGroup) continue;
 
-    const isUnregistered =
-      !contact.name ||
-      contact.name === contact.number ||
-      contact.name === contact.lid ||
-      /^[.\-_* ]+$/.test(contact.name);
+    let phone = contact.number ? contact.number.replace(/\D/g, "") : "";
+    if (isLid(phone)) {
+      const fromStore = resolveLidFromStores(phone);
+      if (fromStore?.phone) {
+        phone = fromStore.phone;
+      } else {
+        continue;
+      }
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phone);
+    if (!normalizedPhone || !isRealPhoneNumber(normalizedPhone)) continue;
+
+    const isUnregistered = !isValidContactName(contact.name, normalizedPhone, contact.lid);
 
     if (filterType === "unregistered" && !isUnregistered) {
       continue;
     }
 
-    const cleanNumber = contact.number ? contact.number.replace(/\D/g, "") : "";
-    if (!cleanNumber) continue;
-
-    const phone = `+${cleanNumber}`;
-    const firstName = isUnregistered ? phone : contact.name;
+    const phoneDisplay = `+${normalizedPhone}`;
+    const firstName = isUnregistered ? normalizedPhone : contact.name;
 
     const row = [
       escapeCsv(firstName), // First Name

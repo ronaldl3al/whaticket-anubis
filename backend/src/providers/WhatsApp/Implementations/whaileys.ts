@@ -64,6 +64,13 @@ import {
   MediaPayload,
   WhatsappContextPayload
 } from "../../../handlers/handleWhatsappEvents";
+import {
+  cleanDigits,
+  isLid,
+  isRealPhoneNumber,
+  normalizePhoneNumber,
+  isValidContactName
+} from "../../../helpers/PhoneNumberUtils";
 
 type WALogger = NonNullable<Parameters<typeof makeInMemoryStore>[0]["logger"]>;
 
@@ -80,6 +87,50 @@ interface Session extends WASocket {
 
 const sessions = new Map<number, Session>();
 const stores = new Map<number, Store>();
+
+export const resolveLidFromStores = (
+  lidOrNumber: string
+): { phone?: string; name?: string } | undefined => {
+  const clean = cleanDigits(lidOrNumber);
+  if (!clean) return undefined;
+
+  for (const store of stores.values()) {
+    if (!store?.contacts) continue;
+    for (const c of Object.values(store.contacts) as any[]) {
+      if (!c) continue;
+      const cLid = cleanDigits(c.lid);
+      const cId = c.id || "";
+      const cIdDigits = cleanDigits(cId);
+
+      const isMatch =
+        (cLid && cLid === clean) ||
+        (cId.includes("@lid") && cIdDigits === clean);
+
+      if (isMatch) {
+        if (cId.includes("@s.whatsapp.net")) {
+          const phone = cleanDigits(cId);
+          if (isRealPhoneNumber(phone)) {
+            return { phone, name: c.name || c.verifiedName };
+          }
+        }
+        if (c.phoneNumber) {
+          const phone = cleanDigits(c.phoneNumber);
+          if (isRealPhoneNumber(phone)) {
+            return { phone, name: c.name || c.verifiedName };
+          }
+        }
+      }
+
+      if (cLid && cLid === clean && cId && !cId.includes("@lid")) {
+        const phone = cleanDigits(cId);
+        if (isRealPhoneNumber(phone)) {
+          return { phone, name: c.name || c.verifiedName };
+        }
+      }
+    }
+  }
+  return undefined;
+};
 
 const msgRetryCounterLRU = new LRUCache<string, number>({
   max: 5000,
@@ -769,28 +820,30 @@ const convertToContactPayload = async (
       ? undefined
       : incomingPushName;
 
-  const number =
+  let resolvedPhoneNumber =
     (isJidUser(resolvedJid) && decoded?.user) ||
     jidDecode(preferPn || "")?.user ||
-    normalizedJid.split("@")[0];
+    "";
 
+  if (!resolvedPhoneNumber && isLidUser(resolvedJid)) {
+    const fromStore = resolveLidFromStores(decoded?.user || normalizedJid);
+    if (fromStore?.phone) {
+      resolvedPhoneNumber = fromStore.phone;
+    }
+  }
+
+  const rawUser = decoded?.user || normalizedJid.split("@")[0];
+  const finalNumber = normalizePhoneNumber(resolvedPhoneNumber || rawUser);
   const lidValue =
     isLidUser(resolvedJid) && decoded?.user ? `${decoded.user}@lid` : lid;
 
   let dbContactName = "";
   try {
     const orConditions: any[] = [];
-    if (number) {
-      orConditions.push({ number });
-      if (number.length >= 8) {
-        orConditions.push({ number: { [Op.like]: `%${number.slice(-8)}` } });
-      }
-      if (number.length === 10 && number.startsWith("4")) {
-        orConditions.push({ number: `58${number}` });
-      }
-      if (number.length === 12 && number.startsWith("58")) {
-        orConditions.push({ number: `0${number.slice(2)}` });
-        orConditions.push({ number: number.slice(2) });
+    if (finalNumber) {
+      orConditions.push({ number: finalNumber });
+      if (finalNumber.length >= 8) {
+        orConditions.push({ number: { [Op.like]: `%${finalNumber.slice(-8)}` } });
       }
     }
     if (lidValue) {
@@ -803,31 +856,30 @@ const convertToContactPayload = async (
       });
       if (
         existingDb &&
-        existingDb.name &&
-        existingDb.name !== existingDb.number &&
-        existingDb.name !== existingDb.lid &&
-        !/^[.\-_*~,#@!?:;'"\\/\s]+$/.test(existingDb.name)
+        isValidContactName(existingDb.name, finalNumber, lidValue)
       ) {
         dbContactName = existingDb.name;
       }
     }
   } catch {}
 
-  const isValid = (val?: string) =>
-    Boolean(val && !/^[.\-_*~,#@!?:;'"\\/\s]+$/.test(val.trim()));
+  const registeredName = isValidContactName(contactInfo?.name, finalNumber, lidValue)
+    ? contactInfo?.name?.trim() || ""
+    : "";
+  const dbRegisteredName = (isValidContactName(dbContactName, finalNumber, lidValue) && !isRealPhoneNumber(dbContactName))
+    ? dbContactName
+    : "";
 
+  // Strictly prioritize registered address book name.
+  // If not registered in phonebook, strictly fallback to clean phone number (never pushName, never LID)
   const name =
-    (isValid(contactInfo?.name) && contactInfo?.name) ||
-    (isValid(dbContactName) && dbContactName) ||
-    (isValid(contactInfo?.notify) && contactInfo?.notify) ||
-    (isValid(pushName) && pushName) ||
-    number ||
-    lidValue ||
-    "";
+    registeredName ||
+    dbRegisteredName ||
+    (isRealPhoneNumber(finalNumber) ? finalNumber : (finalNumber || ""));
 
   return {
     name,
-    number,
+    number: finalNumber,
     lid: lidValue,
     isGroup: false,
     profilePicUrl
@@ -1154,9 +1206,6 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     debouncedSaveCreds(whatsapp, state.creds);
   });
 
-  const isValidContactName = (val?: string): boolean =>
-    Boolean(val && val.trim().length > 0 && !/^[.\-_*~,#@!?:;'"\\/\s]+$/.test(val.trim()));
-
   const syncContacts = async (contacts: any[]) => {
     try {
       let synced = 0;
@@ -1165,33 +1214,42 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
         const rawId = contact.id;
         const isGroup = isJidGroup(rawId);
         const isUser = isJidUser(rawId);
-        const isLid = isLidUser(rawId);
+        const isLidContact = isLidUser(rawId) || isLid(rawId);
 
-        if (!isGroup && !isUser && !isLid) continue;
+        if (!isGroup && !isUser && !isLidContact) continue;
 
         const normalizedJid = jidNormalizedUser(rawId);
         const userPart = normalizedJid.split("@")[0];
-        const cleanNumber = userPart.replace(/\D/g, "") || userPart;
-        const lid = isLid ? normalizedJid : contact.lid;
+        let cleanNumber = cleanDigits(userPart) || userPart;
+        let lid = isLidContact ? normalizedJid : contact.lid;
+
+        if (isLidContact) {
+          let realPhone: string | undefined;
+          if (contact.phoneNumber) {
+            realPhone = cleanDigits(contact.phoneNumber);
+          }
+          if (!realPhone) {
+            const fromStore = resolveLidFromStores(userPart);
+            if (fromStore?.phone) realPhone = fromStore.phone;
+          }
+          if (realPhone) {
+            cleanNumber = normalizePhoneNumber(realPhone);
+          }
+        } else {
+          cleanNumber = normalizePhoneNumber(cleanNumber);
+        }
 
         if (!cleanNumber && !lid) continue;
 
-        const registeredName = isValidContactName(contact.name) ? contact.name.trim() : "";
-        const fallbackNotify = isValidContactName(contact.notify) ? contact.notify.trim() : "";
-        const fallbackVerified = isValidContactName(contact.verifiedName) ? contact.verifiedName.trim() : "";
+        const registeredName = isValidContactName(contact.name, cleanNumber, lid)
+          ? contact.name.trim()
+          : "";
 
         const orConditions: any[] = [];
         if (cleanNumber) {
           orConditions.push({ number: cleanNumber });
           if (cleanNumber.length >= 8) {
             orConditions.push({ number: { [Op.like]: `%${cleanNumber.slice(-8)}` } });
-          }
-          if (cleanNumber.length === 10 && cleanNumber.startsWith("4")) {
-            orConditions.push({ number: `58${cleanNumber}` });
-          }
-          if (cleanNumber.length === 12 && cleanNumber.startsWith("58")) {
-            orConditions.push({ number: `0${cleanNumber.slice(2)}` });
-            orConditions.push({ number: cleanNumber.slice(2) });
           }
         }
         if (lid) {
@@ -1207,16 +1265,23 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
 
           if (registeredName && existing.name !== registeredName) {
             updateData.name = registeredName;
-          } else if (!registeredName && (fallbackVerified || fallbackNotify)) {
+          } else if (!registeredName) {
             const existingIsPlaceholder =
               !existing.name ||
               existing.name === existing.number ||
               existing.name === existing.lid ||
-              !isValidContactName(existing.name);
+              !isValidContactName(existing.name, existing.number, existing.lid);
 
-            if (existingIsPlaceholder) {
-              updateData.name = fallbackVerified || fallbackNotify;
+            if (existingIsPlaceholder && existing.name !== cleanNumber && isRealPhoneNumber(cleanNumber)) {
+              updateData.name = cleanNumber;
             }
+          }
+
+          if (
+            isRealPhoneNumber(cleanNumber) &&
+            (!isRealPhoneNumber(existing.number) || isLid(existing.number))
+          ) {
+            updateData.number = cleanNumber;
           }
 
           if (lid && existing.lid !== lid) {
@@ -1228,11 +1293,10 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
             getIO().emit("contact", { action: "update", contact: existing });
           }
         } else {
-          const bestName =
-            registeredName || fallbackVerified || fallbackNotify || cleanNumber || (isLid ? userPart : rawId);
+          const bestName = registeredName || (isRealPhoneNumber(cleanNumber) ? cleanNumber : (cleanNumber || userPart));
           const created = await Contact.create({
             name: bestName,
-            number: cleanNumber || (isLid ? userPart : rawId),
+            number: cleanNumber || userPart,
             lid,
             isGroup
           });
@@ -1258,33 +1322,41 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
 
         const normalizedJid = jidNormalizedUser(rawJid);
         const isGroup = isJidGroup(rawJid);
-        const isLid = isLidUser(rawJid);
+        const isLidChat = isLidUser(rawJid) || isLid(rawJid);
         const userPart = normalizedJid.split("@")[0];
-        const cleanNumber = userPart.replace(/\D/g, "") || userPart;
+        let cleanNumber = cleanDigits(userPart) || userPart;
+        let resolvedLid = isLidChat ? normalizedJid : undefined;
 
-        if (!cleanNumber && !isLid) continue;
+        if (isLidChat) {
+          const fromStore = resolveLidFromStores(userPart);
+          if (fromStore?.phone) {
+            cleanNumber = normalizePhoneNumber(fromStore.phone);
+          }
+        } else {
+          cleanNumber = normalizePhoneNumber(cleanNumber);
+        }
+
+        if (!cleanNumber && !isLidChat) continue;
 
         const whereContact: any = {};
-        if (isLid) {
-          whereContact.lid = normalizedJid;
+        if (resolvedLid) {
+          whereContact.lid = resolvedLid;
         } else if (cleanNumber) {
           const orList: any[] = [{ number: cleanNumber }];
           if (cleanNumber.length >= 8) {
             orList.push({ number: { [Op.like]: `%${cleanNumber.slice(-8)}` } });
-          }
-          if (cleanNumber.length === 10 && cleanNumber.startsWith("4")) {
-            orList.push({ number: `58${cleanNumber}` });
           }
           whereContact[Op.or] = orList;
         }
 
         let contact = await Contact.findOne({ where: whereContact });
         if (!contact) {
-          const chatName = chat.name || cleanNumber || rawJid;
+          const isRegistered = isValidContactName(chat.name, cleanNumber, resolvedLid);
+          const chatName = isRegistered ? chat.name.trim() : (isRealPhoneNumber(cleanNumber) ? cleanNumber : (cleanNumber || rawJid));
           contact = await Contact.create({
             name: chatName,
-            number: cleanNumber || (isLid ? userPart : rawJid),
-            lid: isLid ? normalizedJid : undefined,
+            number: cleanNumber || userPart,
+            lid: resolvedLid,
             isGroup
           });
           getIO().emit("contact", { action: "create", contact });
@@ -1428,38 +1500,42 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
             }
 
             const normalizedJid = jidNormalizedUser(rawJid);
-            const isLid = isLidUser(rawJid);
+            const isLidMsg = isLidUser(rawJid) || isLid(rawJid);
             const isGroup = isJidGroup(rawJid);
             const userPart = normalizedJid.split("@")[0];
-            const cleanNumber = userPart.replace(/\D/g, "") || userPart;
+            let cleanNumber = cleanDigits(userPart) || userPart;
+            let resolvedLid = isLidMsg ? normalizedJid : undefined;
 
-            if (!cleanNumber && !isLid) continue;
+            if (isLidMsg) {
+              const fromStore = resolveLidFromStores(userPart);
+              if (fromStore?.phone) {
+                cleanNumber = normalizePhoneNumber(fromStore.phone);
+              }
+            } else {
+              cleanNumber = normalizePhoneNumber(cleanNumber);
+            }
+
+            if (!cleanNumber && !isLidMsg) continue;
 
             const whereContact: any = {};
-            if (isLid) {
-              whereContact.lid = normalizedJid;
+            if (resolvedLid) {
+              whereContact.lid = resolvedLid;
             } else if (cleanNumber) {
               const orList: any[] = [{ number: cleanNumber }];
               if (cleanNumber.length >= 8) {
                 orList.push({ number: { [Op.like]: `%${cleanNumber.slice(-8)}` } });
-              }
-              if (cleanNumber.length === 10 && cleanNumber.startsWith("4")) {
-                orList.push({ number: `58${cleanNumber}` });
               }
               whereContact[Op.or] = orList;
             }
 
             let contact = await Contact.findOne({ where: whereContact });
             if (!contact) {
-              const pushName = msg.pushName?.trim();
-              const isValidName =
-                pushName && !/^[.\-_*~,#@!?:;'"\\/\s]+$/.test(pushName);
-              const contactName = isValidName ? pushName : (cleanNumber || rawJid);
+              const contactName = isRealPhoneNumber(cleanNumber) ? cleanNumber : (cleanNumber || rawJid);
 
               contact = await Contact.create({
                 name: contactName,
-                number: cleanNumber || (isLid ? userPart : rawJid),
-                lid: isLid ? normalizedJid : undefined,
+                number: cleanNumber || userPart,
+                lid: resolvedLid,
                 isGroup
               });
               getIO().emit("contact", { action: "create", contact });
@@ -2196,15 +2272,34 @@ const getContacts = async (sessionId: number): Promise<ProviderContact[]> => {
 
   if (wbot.store?.contacts) {
     Object.values(wbot.store.contacts).forEach(contact => {
-      if (contact.id && isJidUser(contact.id)) {
-        contacts.push({
-          id: contact.id,
-          number: jidNormalizedUser(contact.id).replace("@s.whatsapp.net", ""),
-          name: contact.name || contact.verifiedName || contact.notify || "",
-          pushname: contact.notify || "",
-          isGroup: false
-        });
+      if (!contact.id || contact.id.includes("@g.us") || contact.id === "status@broadcast") {
+        return;
       }
+      const isUser = isJidUser(contact.id);
+      const isLidContact = isLid(contact.id);
+      let phone = isUser ? jidNormalizedUser(contact.id).replace("@s.whatsapp.net", "") : "";
+
+      if (isLidContact) {
+        const fromStore = resolveLidFromStores(contact.id);
+        if (fromStore?.phone) {
+          phone = fromStore.phone;
+        }
+      }
+
+      if (!phone || !isRealPhoneNumber(phone)) return;
+
+      const cleanPhone = normalizePhoneNumber(phone);
+      const registeredName = isValidContactName(contact.name, cleanPhone, contact.lid)
+        ? contact.name?.trim() || ""
+        : "";
+
+      contacts.push({
+        id: `${cleanPhone}@s.whatsapp.net`,
+        number: cleanPhone,
+        name: registeredName || cleanPhone,
+        pushname: contact.notify || "",
+        isGroup: false
+      });
     });
   }
 

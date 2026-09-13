@@ -4,6 +4,13 @@ import { whatsappProvider } from "../../providers/WhatsApp";
 import Contact from "../../models/Contact";
 import { logger } from "../../utils/logger";
 import { getIO } from "../../libs/socket";
+import {
+  cleanDigits,
+  isLid,
+  isRealPhoneNumber,
+  normalizePhoneNumber,
+  isValidContactName
+} from "../../helpers/PhoneNumberUtils";
 
 const ImportContactsService = async (
   userId: number
@@ -26,16 +33,12 @@ const ImportContactsService = async (
     for (const { number: rawNumber, name: rawName } of phoneContacts) {
       if (!rawNumber) continue;
 
-      const cleanNumber = rawNumber.replace(/\D/g, "");
-      if (!cleanNumber || cleanNumber.length < 7) continue;
+      if (isLid(rawNumber)) continue; // Skip raw LID entries in phone contact import
 
-      const isValidName =
-        rawName &&
-        rawName.trim().length > 0 &&
-        rawName !== rawNumber &&
-        rawName !== cleanNumber &&
-        !/^[.\-_*~,#@!?:;'"\\/\s]+$/.test(rawName.trim());
+      const cleanNumber = normalizePhoneNumber(rawNumber);
+      if (!cleanNumber || !isRealPhoneNumber(cleanNumber)) continue;
 
+      const isValidName = isValidContactName(rawName, cleanNumber);
       const finalName = isValidName ? rawName.trim() : cleanNumber;
 
       const orConditions: any[] = [
@@ -44,13 +47,6 @@ const ImportContactsService = async (
       if (cleanNumber.length >= 8) {
         orConditions.push({ number: { [Op.like]: `%${cleanNumber.slice(-8)}` } });
       }
-      if (cleanNumber.length === 10 && cleanNumber.startsWith("4")) {
-        orConditions.push({ number: `58${cleanNumber}` });
-      }
-      if (cleanNumber.length === 12 && cleanNumber.startsWith("58")) {
-        orConditions.push({ number: `0${cleanNumber.slice(2)}` });
-        orConditions.push({ number: cleanNumber.slice(2) });
-      }
 
       try {
         const numberExists = await Contact.findOne({
@@ -58,8 +54,19 @@ const ImportContactsService = async (
         });
 
         if (numberExists) {
+          const updateData: any = {};
           if (isValidName && numberExists.name !== finalName) {
-            await numberExists.update({ name: finalName });
+            updateData.name = finalName;
+          } else if (!isValidName && (!isValidContactName(numberExists.name, numberExists.number) || isLid(numberExists.name))) {
+            updateData.name = cleanNumber;
+          }
+
+          if (isRealPhoneNumber(cleanNumber) && (!isRealPhoneNumber(numberExists.number) || isLid(numberExists.number))) {
+            updateData.number = cleanNumber;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await numberExists.update(updateData);
             updatedCount++;
             io.emit("contact", { action: "update", contact: numberExists });
           }

@@ -3,6 +3,14 @@ import { getIO } from "../../libs/socket";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import { logger } from "../../utils/logger";
+import {
+  cleanDigits,
+  isLid,
+  isRealPhoneNumber,
+  normalizePhoneNumber,
+  isValidContactName
+} from "../../helpers/PhoneNumberUtils";
+import { resolveLidFromStores } from "../../providers/WhatsApp/Implementations/whaileys";
 
 interface ExtraInfo {
   name: string;
@@ -29,31 +37,44 @@ const emitContact = (action: "update" | "create", contact: Contact) => {
 const CreateOrUpdateContactService = async ({
   name,
   number: rawNumber,
-  lid,
+  lid: inputLid,
   profilePicUrl,
   isGroup,
   email = "",
   extraInfo = [],
   isRegisteredName = false
 }: Request): Promise<Contact> => {
-  const number = isGroup ? rawNumber : rawNumber.replace(/[^0-9]/g, "");
+  let lid = inputLid;
+  const isInputLid = isLid(rawNumber);
+  let resolvedNumber = rawNumber;
+
+  if (isInputLid) {
+    const cleanLid = cleanDigits(rawNumber);
+    if (!lid) lid = `${cleanLid}@lid`;
+
+    const fromStore = resolveLidFromStores(cleanLid);
+    if (fromStore?.phone) {
+      resolvedNumber = fromStore.phone;
+    }
+  }
+
+  const number = isGroup ? resolvedNumber : normalizePhoneNumber(resolvedNumber);
   if (!number && !lid) throw new Error("Either number or lid must be provided");
 
-  const isNameGarbage = !name || /^[.\-_*~,#@!?:;'"\\/\s]+$/.test(name.trim());
-  const validName = isNameGarbage ? (number || lid || "") : name.trim();
+  const hasRegisteredName = isRegisteredName && isValidContactName(name, number, lid);
+  const validName = hasRegisteredName
+    ? name.trim()
+    : isValidContactName(name, number, lid)
+    ? name.trim()
+    : isRealPhoneNumber(number)
+    ? number
+    : number || lid || "";
 
   const orConditions: any[] = [];
   if (number) {
     orConditions.push({ number });
     if (number.length >= 8) {
       orConditions.push({ number: { [Op.like]: `%${number.slice(-8)}` } });
-    }
-    if (number.length === 10 && number.startsWith("4")) {
-      orConditions.push({ number: `58${number}` });
-    }
-    if (number.length === 12 && number.startsWith("58")) {
-      orConditions.push({ number: `0${number.slice(2)}` });
-      orConditions.push({ number: number.slice(2) });
     }
   }
 
@@ -120,6 +141,12 @@ const CreateOrUpdateContactService = async ({
       lid: lid || contactByNumber.lid,
       profilePicUrl: profilePicUrl || contactByNumber.profilePicUrl
     };
+    if (
+      isRealPhoneNumber(number) &&
+      (!isRealPhoneNumber(contactByNumber.number) || isLid(contactByNumber.number))
+    ) {
+      updateData.number = number;
+    }
     if (shouldUpdateName(contactByNumber.name)) {
       updateData.name = validName;
     }
@@ -132,9 +159,11 @@ const CreateOrUpdateContactService = async ({
 
   if (contactByLid) {
     const updateData: any = {
-      number: number || contactByLid.number,
       profilePicUrl: profilePicUrl || contactByLid.profilePicUrl
     };
+    if (isRealPhoneNumber(number) || !contactByLid.number) {
+      updateData.number = number;
+    }
     if (shouldUpdateName(contactByLid.name)) {
       updateData.name = validName;
     }

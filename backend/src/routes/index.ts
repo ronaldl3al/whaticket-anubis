@@ -30,6 +30,8 @@ routes.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
     provider: process.env.WHATSAPP_PROVIDER || "whaileys",
+    features: ["lid-resolution", "merge-duplicates", "unregistered-phone-names"],
+    build: "20260913-v2",
     time: new Date().toISOString()
   });
 });

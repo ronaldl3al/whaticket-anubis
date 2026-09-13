@@ -103,6 +103,7 @@ const Contacts = () => {
   const [deletingContact, setDeletingContact] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false);
+  const [confirmMergeOpen, setConfirmMergeOpen] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
@@ -255,6 +256,22 @@ const Contacts = () => {
     }
   };
 
+  const handleMergeDuplicates = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.post("/contacts/merge-duplicates");
+      toast.success(
+        `Fusión completada: ${data.duplicatesMerged || 0} contactos duplicados fusionados y ${data.lidsResolved || 0} identificadores LID convertidos a celulares`
+      );
+      dispatch({ type: "RESET" });
+      setPageNumber(1);
+      setLoading(false);
+    } catch (err) {
+      toastError(err);
+      setLoading(false);
+    }
+  };
+
   const handleDeleteAllContacts = async () => {
     try {
       setLoading(true);
@@ -313,6 +330,14 @@ const Contacts = () => {
       >
         ¿Estás completamente seguro de que deseas eliminar TODOS los contactos de Whaticket? Esta acción vaciará la lista para que puedas importar tu archivo limpio desde cero.
       </ConfirmationModal>
+      <ConfirmationModal
+        title="Fusionar Contactos Duplicados"
+        open={confirmMergeOpen}
+        onClose={setConfirmMergeOpen}
+        onConfirm={handleMergeDuplicates}
+      >
+        ¿Desea buscar y fusionar contactos duplicados? Se unificarán números con formatos locales (0424... / 424...) e internacionales (58424...), así como identificadores LID de WhatsApp con sus números celulares reales. Se reasignarán todos los tickets y mensajes sin perder ninguna información.
+      </ConfirmationModal>
       <MainHeader>
         <Title>{i18n.t("contacts.title")}</Title>
         <MainHeaderButtonsWrapper>
@@ -350,6 +375,13 @@ const Contacts = () => {
             startIcon={<WhatsAppIcon />}
           >
             Sincronizar WhatsApp
+          </Button>
+          <Button
+            variant="contained"
+            style={{ backgroundColor: "#f57c00", color: "#fff" }}
+            onClick={() => setConfirmMergeOpen(true)}
+          >
+            Fusionar Duplicados
           </Button>
           <Button
             variant="contained"

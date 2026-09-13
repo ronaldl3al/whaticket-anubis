@@ -29,6 +29,12 @@ contactRoutes.post(
   ImportPhoneContactsController.store
 );
 
+contactRoutes.post(
+  "/contacts/merge-duplicates",
+  isAuth,
+  ContactController.mergeDuplicates
+);
+
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 
 contactRoutes.get("/contacts/:contactId", isAuth, ContactController.show);

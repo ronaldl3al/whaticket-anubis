@@ -18,6 +18,7 @@ import {
   ExportGoogleContactsService,
   ImportGoogleContactsService
 } from "../services/ContactServices/GoogleContactsService";
+import MergeDuplicateContactsService from "../services/ContactServices/MergeDuplicateContactsService";
 
 type IndexQuery = {
   searchParam: string;
@@ -222,4 +223,12 @@ export const removeAll = async (
   });
 
   return res.status(200).json({ message: "All contacts deleted", count });
+};
+
+export const mergeDuplicates = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const result = await MergeDuplicateContactsService();
+  return res.status(200).json(result);
 };
