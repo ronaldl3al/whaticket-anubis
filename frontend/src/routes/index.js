@@ -12,6 +12,7 @@ import Settings from "../pages/Settings/";
 import Users from "../pages/Users";
 import Contacts from "../pages/Contacts/";
 import QuickAnswers from "../pages/QuickAnswers/";
+import QuickNotes from "../pages/QuickNotes/";
 import Queues from "../pages/Queues/";
 import WhatsAppWebChat from "../pages/WhatsAppWebChat/";
 import { AuthProvider } from "../context/Auth/AuthContext";
@@ -36,6 +37,7 @@ const Routes = () => {
                 <Route exact path="/contacts" component={Contacts} isPrivate />
                 <Route exact path="/users" component={Users} isPrivate />
                 <Route exact path="/quickAnswers" component={QuickAnswers} isPrivate />
+                <Route exact path="/quickNotes" component={QuickNotes} isPrivate />
                 <Route exact path="/Settings" component={Settings} isPrivate />
                 <Route exact path="/Queues" component={Queues} isPrivate />
               </LoggedInLayout>

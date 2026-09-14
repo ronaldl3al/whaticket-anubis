@@ -13,6 +13,13 @@ import CircularProgress from "@material-ui/core/CircularProgress";
 import { parseISO, format, isToday, isYesterday } from "date-fns";
 import clsx from "clsx";
 
+import Drawer from "@material-ui/core/Drawer";
+import Tooltip from "@material-ui/core/Tooltip";
+import MenuBookIcon from "@material-ui/icons/MenuBook";
+import CloseIcon from "@material-ui/icons/Close";
+import FileCopyOutlinedIcon from "@material-ui/icons/FileCopyOutlined";
+import { toast } from "react-toastify";
+
 import api from "../../services/api";
 import openSocket from "../../services/socket-io";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -450,6 +457,17 @@ const WhatsAppWebChat = () => {
   const [filter, setFilter] = useState("all");
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [profilePics, setProfilePics] = useState({});
+  const [quickNotesDrawerOpen, setQuickNotesDrawerOpen] = useState(false);
+  const [chatQuickNotes, setChatQuickNotes] = useState([]);
+  const [chatNotesSearch, setChatNotesSearch] = useState("");
+
+  useEffect(() => {
+    if (quickNotesDrawerOpen) {
+      api.get("/quickNotes").then(({ data }) => {
+        setChatQuickNotes(data.quickNotes || []);
+      }).catch(() => {});
+    }
+  }, [quickNotesDrawerOpen]);
 
   // Fetch client profile picture dynamically
   const fetchProfilePic = useCallback(async (contactId) => {
@@ -812,6 +830,18 @@ const WhatsAppWebChat = () => {
                     </Typography>
                   </div>
                 </div>
+
+                {/* Quick Action Button for Notes */}
+                <div>
+                  <Tooltip title="Notas Rápidas y Material de Apoyo">
+                    <IconButton
+                      onClick={() => setQuickNotesDrawerOpen(true)}
+                      style={{ padding: 8 }}
+                    >
+                      <MenuBookIcon style={{ color: "#B58863" }} />
+                    </IconButton>
+                  </Tooltip>
+                </div>
               </div>
 
               <div className={classes.messagesArea}>
@@ -822,7 +852,7 @@ const WhatsAppWebChat = () => {
               </div>
 
               {/* MessageInput is always open to allow immediate typing like WhatsApp Desktop */}
-              <MessageInput ticketStatus="open" />
+              <MessageInput ticketId={selectedTicket.id} ticketStatus="open" />
             </ReplyMessageProvider>
           ) : (
             <div className={classes.welcomeScreen}>
@@ -833,7 +863,7 @@ const WhatsAppWebChat = () => {
                 WhatsApp Desktop • Anubis Store
               </Typography>
               <Typography className={classes.welcomeSubtitle}>
-                Envía y recibe mensajes, fotos, notas de voz y documentos en tiempo real.
+                Envía y recibe mensajes, fotos, videos y documentos en tiempo real.
                 Las notificaciones se sincronizan automáticamente con tu WhatsApp nativo.
               </Typography>
               <div className={classes.welcomeFooter}>
@@ -843,6 +873,112 @@ const WhatsAppWebChat = () => {
             </div>
           )}
         </div>
+
+        {/* Quick Notes Side Drawer for Agents */}
+        <Drawer
+          anchor="right"
+          open={quickNotesDrawerOpen}
+          onClose={() => setQuickNotesDrawerOpen(false)}
+          PaperProps={{
+            style: {
+              width: 380,
+              maxWidth: "90vw",
+              backgroundColor: "#161616",
+              borderLeft: "1px solid #3D4D55",
+              color: "#D3C3B9",
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+            }
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, borderBottom: "1px solid #3D4D55", paddingBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <MenuBookIcon style={{ color: "#B58863" }} />
+              <Typography variant="subtitle1" style={{ fontWeight: 700, color: "#D3C3B9" }}>
+                Notas Rápidas (Apoyo)
+              </Typography>
+            </div>
+            <IconButton size="small" onClick={() => setQuickNotesDrawerOpen(false)} style={{ color: "#A79E9C" }}>
+              <CloseIcon />
+            </IconButton>
+          </div>
+
+          <InputBase
+            placeholder="Buscar nota rápida..."
+            value={chatNotesSearch}
+            onChange={(e) => setChatNotesSearch(e.target.value)}
+            style={{
+              backgroundColor: "#1a2e36",
+              color: "#D3C3B9",
+              padding: "6px 12px",
+              borderRadius: 8,
+              border: "1px solid #3D4D55",
+              marginBottom: 16,
+              fontSize: "0.9rem",
+            }}
+          />
+
+          <div style={{ overflowY: "auto", flexGrow: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+            {chatQuickNotes
+              .filter(n =>
+                !chatNotesSearch ||
+                (n.title && n.title.toLowerCase().includes(chatNotesSearch.toLowerCase())) ||
+                (n.content && n.content.toLowerCase().includes(chatNotesSearch.toLowerCase())) ||
+                (n.category && n.category.toLowerCase().includes(chatNotesSearch.toLowerCase()))
+              )
+              .map((note) => (
+                <div
+                  key={note.id}
+                  style={{
+                    backgroundColor: "#1a2e36",
+                    border: "1px solid #3D4D55",
+                    borderRadius: 8,
+                    padding: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                    <Typography variant="body2" style={{ fontWeight: 700, color: "#D3C3B9" }}>
+                      {note.title}
+                    </Typography>
+                    <span style={{ fontSize: "0.72rem", backgroundColor: "rgba(181, 136, 99, 0.2)", color: "#B58863", padding: "1px 6px", borderRadius: 4 }}>
+                      {note.category || "General"}
+                    </span>
+                  </div>
+
+                  {note.mediaUrl && (
+                    note.mediaType === "video" ? (
+                      <video src={note.mediaUrl} controls style={{ width: "100%", maxHeight: 120, borderRadius: 6, margin: "6px 0" }} />
+                    ) : (
+                      <img src={note.mediaUrl} alt={note.title} style={{ width: "100%", maxHeight: 120, objectFit: "cover", borderRadius: 6, margin: "6px 0" }} />
+                    )
+                  )}
+
+                  <Typography variant="caption" style={{ color: "#A79E9C", display: "block", whiteSpace: "pre-wrap", marginBottom: 8 }}>
+                    {note.content}
+                  </Typography>
+
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<FileCopyOutlinedIcon fontSize="small" />}
+                    style={{ color: "#B58863", borderColor: "#B58863", textTransform: "none", fontSize: "0.78rem" }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(note.content);
+                      toast.success("¡Texto de la nota copiado!");
+                    }}
+                  >
+                    Copiar Texto
+                  </Button>
+                </div>
+              ))}
+            {chatQuickNotes.length === 0 && (
+              <Typography variant="body2" style={{ color: "#A79E9C", textAlign: "center", marginTop: 20 }}>
+                No tienes notas rápidas guardadas. Puedes crearlas desde el menú lateral "Notas Rápidas".
+              </Typography>
+            )}
+          </div>
+        </Drawer>
       </div>
     </ChatErrorBoundary>
   );

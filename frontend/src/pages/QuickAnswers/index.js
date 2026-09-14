@@ -255,7 +255,14 @@ const QuickAnswers = () => {
               {quickAnswers.map((quickAnswer) => (
                 <TableRow key={quickAnswer.id}>
                   <TableCell align="center">{quickAnswer.shortcut}</TableCell>
-                  <TableCell align="center">{quickAnswer.message}</TableCell>
+                  <TableCell align="center">
+                    {quickAnswer.message}
+                    {quickAnswer.mediaUrl && (
+                      <span style={{ marginLeft: 8, fontSize: "0.8rem", padding: "2px 6px", borderRadius: 4, backgroundColor: "rgba(181, 136, 99, 0.2)", color: "#B58863" }}>
+                        {quickAnswer.mediaType === "video" ? "🎥 Video" : "📷 Foto"}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell align="center">
                     <IconButton
                       size="small"

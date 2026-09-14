@@ -10,6 +10,7 @@ import Queue from "../models/Queue";
 import WhatsappQueue from "../models/WhatsappQueue";
 import UserQueue from "../models/UserQueue";
 import QuickAnswer from "../models/QuickAnswer";
+import QuickNote from "../models/QuickNote";
 import WppKey from "../models/WppKey";
 
 // eslint-disable-next-line
@@ -29,6 +30,7 @@ const models = [
   WhatsappQueue,
   UserQueue,
   QuickAnswer,
+  QuickNote,
   WppKey
 ];
 

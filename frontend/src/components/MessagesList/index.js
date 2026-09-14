@@ -635,86 +635,96 @@ const MessagesList = ({ ticketId, isGroup }) => {
   const renderMessages = () => {
     if (messagesList.length > 0) {
       const viewMessagesList = messagesList.map((message, index) => {
-        if (!message.fromMe) {
-          return (
-            <React.Fragment key={message.id}>
-              {renderDailyTimestamps(message, index)}
-              {renderMessageDivider(message, index)}
-              <div className={classes.messageLeft} id={`message-${message.id}`}>
-                <IconButton
-                  variant="contained"
-                  size="small"
-                  id="messageActionsButton"
-                  disabled={message.isDeleted}
-                  className={classes.messageActionsButton}
-                  onClick={(e) => handleOpenMessageOptionsMenu(e, message)}
-                >
-                  <ExpandMore />
-                </IconButton>
-                {isGroup && (
-                  <span className={classes.messageContactName}>
-                    {message.contact?.name}
-                  </span>
-                )}
-                {(message.mediaUrl || message.mediaType === "location" || message.mediaType === "vcard"
-                  //|| message.mediaType === "multi_vcard" 
-                ) && checkMessageMedia(message)}
-                <div className={classes.textContentItem}>
-                  {message.quotedMsg && renderQuotedMessage(message)}
-                  <MarkdownWrapper>{typeof message.body === "string" ? message.body : String(message.body || "")}</MarkdownWrapper>
-                  <span className={classes.timestamp}>
-                    {safeFormatTime(message.createdAt)}
-                  </span>
-                </div>
-              </div>
-            </React.Fragment>
-          );
-        } else {
-          return (
-            <React.Fragment key={message.id}>
-              {renderDailyTimestamps(message, index)}
-              {renderMessageDivider(message, index)}
-              <div className={classes.messageRight} id={`message-${message.id}`}>
-                <IconButton
-                  variant="contained"
-                  size="small"
-                  id="messageActionsButton"
-                  disabled={message.isDeleted}
-                  className={classes.messageActionsButton}
-                  onClick={(e) => handleOpenMessageOptionsMenu(e, message)}
-                >
-                  <ExpandMore />
-                </IconButton>
-                {(message.mediaUrl || message.mediaType === "location" || message.mediaType === "vcard"
-                  //|| message.mediaType === "multi_vcard" 
-                ) && checkMessageMedia(message)}
-                <div
-                  className={clsx(classes.textContentItem, {
-                    [classes.textContentItemDeleted]: message.isDeleted,
-                  })}
-                >
-                  {message.isDeleted && (
-                    <Block
-                      color="disabled"
-                      fontSize="small"
-                      className={classes.deletedIcon}
-                    />
+        try {
+          if (!message || !message.id) return null;
+          if (!message.fromMe) {
+            return (
+              <React.Fragment key={message.id}>
+                {renderDailyTimestamps(message, index)}
+                {renderMessageDivider(message, index)}
+                <div className={classes.messageLeft} id={`message-${message.id}`}>
+                  <IconButton
+                    variant="contained"
+                    size="small"
+                    id="messageActionsButton"
+                    disabled={message.isDeleted}
+                    className={classes.messageActionsButton}
+                    onClick={(e) => handleOpenMessageOptionsMenu(e, message)}
+                  >
+                    <ExpandMore />
+                  </IconButton>
+                  {isGroup && (
+                    <span className={classes.messageContactName}>
+                      {message.contact?.name}
+                    </span>
                   )}
-                  {message.quotedMsg && renderQuotedMessage(message)}
-                  <MarkdownWrapper>{typeof message.body === "string" ? message.body : String(message.body || "")}</MarkdownWrapper>
-                  <span className={classes.timestamp}>
-                    {safeFormatTime(message.createdAt)}
-                    {renderMessageAck(message)}
-                  </span>
+                  {(message.mediaUrl || message.mediaType === "location" || message.mediaType === "vcard"
+                    //|| message.mediaType === "multi_vcard" 
+                  ) && checkMessageMedia(message)}
+                  <div className={classes.textContentItem}>
+                    {message.quotedMsg && renderQuotedMessage(message)}
+                    <MarkdownWrapper>{typeof message.body === "string" ? message.body : String(message.body || "")}</MarkdownWrapper>
+                    <span className={classes.timestamp}>
+                      {safeFormatTime(message.createdAt)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </React.Fragment>
-          );
+              </React.Fragment>
+            );
+          } else {
+            return (
+              <React.Fragment key={message.id}>
+                {renderDailyTimestamps(message, index)}
+                {renderMessageDivider(message, index)}
+                <div className={classes.messageRight} id={`message-${message.id}`}>
+                  <IconButton
+                    variant="contained"
+                    size="small"
+                    id="messageActionsButton"
+                    disabled={message.isDeleted}
+                    className={classes.messageActionsButton}
+                    onClick={(e) => handleOpenMessageOptionsMenu(e, message)}
+                  >
+                    <ExpandMore />
+                  </IconButton>
+                  {(message.mediaUrl || message.mediaType === "location" || message.mediaType === "vcard"
+                    //|| message.mediaType === "multi_vcard" 
+                  ) && checkMessageMedia(message)}
+                  <div
+                    className={clsx(classes.textContentItem, {
+                      [classes.textContentItemDeleted]: message.isDeleted,
+                    })}
+                  >
+                    {message.isDeleted && (
+                      <Block
+                        color="disabled"
+                        fontSize="small"
+                        className={classes.deletedIcon}
+                      />
+                    )}
+                    {message.quotedMsg && renderQuotedMessage(message)}
+                    <MarkdownWrapper>{typeof message.body === "string" ? message.body : String(message.body || "")}</MarkdownWrapper>
+                    <span className={classes.timestamp}>
+                      {safeFormatTime(message.createdAt)}
+                      {renderMessageAck(message)}
+                    </span>
+                  </div>
+                </div>
+              </React.Fragment>
+            );
+          }
+        } catch (msgErr) {
+          console.error("Error rendering message item:", msgErr);
+          return null;
         }
       });
       return viewMessagesList;
     } else {
-      return <div>Say hello to your new contact!</div>;
+      return (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: "#8696a0", fontSize: "0.9rem" }}>
+          Inicia la conversación enviando un mensaje o adjuntando fotos y videos.
+        </div>
+      );
     }
   };
 

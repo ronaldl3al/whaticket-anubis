@@ -18,6 +18,8 @@ type IndexQuery = {
 interface QuickAnswerData {
   shortcut: string;
   message: string;
+  mediaUrl?: string;
+  mediaType?: string;
 }
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
@@ -36,7 +38,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const QuickAnswerSchema = Yup.object().shape({
     shortcut: Yup.string().required(),
-    message: Yup.string().required()
+    message: Yup.string().required(),
+    mediaUrl: Yup.string().nullable(),
+    mediaType: Yup.string().nullable()
   });
 
   try {
@@ -74,7 +78,9 @@ export const update = async (
 
   const schema = Yup.object().shape({
     shortcut: Yup.string(),
-    message: Yup.string()
+    message: Yup.string(),
+    mediaUrl: Yup.string().nullable(),
+    mediaType: Yup.string().nullable()
   });
 
   try {
@@ -114,4 +120,28 @@ export const remove = async (
   });
 
   return res.status(200).json({ message: "Quick Answer deleted" });
+};
+
+export const mediaUpload = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const file = req.file as Express.Multer.File;
+  if (!file) {
+    throw new AppError("ERR_NO_FILE_UPLOADED");
+  }
+
+  const backendUrl = process.env.BACKEND_URL || "";
+  const mediaUrl = `${backendUrl}/public/${file.filename}`;
+  const mediaType = file.mimetype.startsWith("video")
+    ? "video"
+    : file.mimetype.startsWith("image")
+    ? "image"
+    : "document";
+
+  return res.status(200).json({
+    mediaUrl,
+    mediaType,
+    fileName: file.originalname
+  });
 };

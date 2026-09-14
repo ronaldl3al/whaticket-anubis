@@ -4,6 +4,8 @@ import AppError from "../../errors/AppError";
 interface QuickAnswerData {
   shortcut?: string;
   message?: string;
+  mediaUrl?: string;
+  mediaType?: string;
 }
 
 interface Request {
@@ -15,11 +17,11 @@ const UpdateQuickAnswerService = async ({
   quickAnswerData,
   quickAnswerId
 }: Request): Promise<QuickAnswer> => {
-  const { shortcut, message } = quickAnswerData;
+  const { shortcut, message, mediaUrl, mediaType } = quickAnswerData;
 
   const quickAnswer = await QuickAnswer.findOne({
     where: { id: quickAnswerId },
-    attributes: ["id", "shortcut", "message"]
+    attributes: ["id", "shortcut", "message", "mediaUrl", "mediaType"]
   });
 
   if (!quickAnswer) {
@@ -27,11 +29,13 @@ const UpdateQuickAnswerService = async ({
   }
   await quickAnswer.update({
     shortcut,
-    message
+    message,
+    mediaUrl,
+    mediaType
   });
 
   await quickAnswer.reload({
-    attributes: ["id", "shortcut", "message"]
+    attributes: ["id", "shortcut", "message", "mediaUrl", "mediaType"]
   });
 
   return quickAnswer;

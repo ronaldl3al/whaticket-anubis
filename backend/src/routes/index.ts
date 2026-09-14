@@ -10,6 +10,7 @@ import messageRoutes from "./messageRoutes";
 import whatsappSessionRoutes from "./whatsappSessionRoutes";
 import queueRoutes from "./queueRoutes";
 import quickAnswerRoutes from "./quickAnswerRoutes";
+import quickNoteRoutes from "./quickNoteRoutes";
 import apiRoutes from "./apiRoutes";
 import evolutionWebhookRoutes from "./evolutionWebhookRoutes";
 
@@ -25,6 +26,7 @@ routes.use(messageRoutes);
 routes.use(whatsappSessionRoutes);
 routes.use(queueRoutes);
 routes.use(quickAnswerRoutes);
+routes.use(quickNoteRoutes);
 routes.use("/api/messages", apiRoutes);
 routes.use(evolutionWebhookRoutes);
 

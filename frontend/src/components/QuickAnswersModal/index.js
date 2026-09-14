@@ -70,9 +70,12 @@ const QuickAnswersModal = ({
   const initialState = {
     shortcut: "",
     message: "",
+    mediaUrl: "",
+    mediaType: "",
   };
 
   const [quickAnswer, setQuickAnswer] = useState(initialState);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -106,6 +109,25 @@ const QuickAnswersModal = ({
   const handleClose = () => {
     onClose();
     setQuickAnswer(initialState);
+  };
+
+  const handleMediaUpload = async (e, setFieldValue) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    setUploadingMedia(true);
+    const formData = new FormData();
+    formData.append("media", file);
+
+    try {
+      const { data } = await api.post("/quickAnswers/media-upload", formData);
+      setFieldValue("mediaUrl", data.mediaUrl);
+      setFieldValue("mediaType", data.mediaType);
+      toast.success("Archivo adjunto correctamente");
+    } catch (err) {
+      toastError(err);
+    }
+    setUploadingMedia(false);
   };
 
   const handleSaveQuickAnswer = async (values) => {
@@ -151,7 +173,7 @@ const QuickAnswersModal = ({
             }, 400);
           }}
         >
-          {({ values, errors, touched, isSubmitting }) => (
+          {({ values, errors, touched, isSubmitting, setFieldValue }) => (
             <Form>
               <DialogContent dividers>
                 <div className={classes.textQuickAnswerContainer}>
@@ -160,6 +182,7 @@ const QuickAnswersModal = ({
                     label={i18n.t("quickAnswersModal.form.shortcut")}
                     name="shortcut"
                     autoFocus
+                    placeholder="ej: precios, catalogo, garantia"
                     error={touched.shortcut && Boolean(errors.shortcut)}
                     helperText={touched.shortcut && errors.shortcut}
                     variant="outlined"
@@ -179,16 +202,67 @@ const QuickAnswersModal = ({
                     margin="dense"
                     className={classes.textField}
                     multiline
-                    rows={5}
+                    rows={4}
                     fullWidth
                   />
+                </div>
+
+                {/* Multimedia Attachment */}
+                <div style={{ marginTop: 16 }}>
+                  <input
+                    type="file"
+                    id="quick-answer-media"
+                    style={{ display: "none" }}
+                    accept="image/*,video/*"
+                    onChange={(e) => handleMediaUpload(e, setFieldValue)}
+                  />
+                  <label htmlFor="quick-answer-media">
+                    <Button
+                      variant="outlined"
+                      component="span"
+                      color="primary"
+                      disabled={uploadingMedia || isSubmitting}
+                      style={{ textTransform: "none" }}
+                    >
+                      {uploadingMedia ? "Subiendo archivo..." : "📷 / 🎥 Adjuntar Foto o Video de Apoyo"}
+                    </Button>
+                  </label>
+
+                  {values.mediaUrl && (
+                    <div style={{ marginTop: 12, padding: 8, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8 }}>
+                      {values.mediaType === "video" ? (
+                        <video
+                          src={values.mediaUrl}
+                          controls
+                          style={{ maxWidth: "100%", maxHeight: 180, borderRadius: 6, display: "block" }}
+                        />
+                      ) : (
+                        <img
+                          src={values.mediaUrl}
+                          alt="preview"
+                          style={{ maxWidth: "100%", maxHeight: 180, borderRadius: 6, objectFit: "contain", display: "block" }}
+                        />
+                      )}
+                      <Button
+                        size="small"
+                        color="secondary"
+                        style={{ marginTop: 8 }}
+                        onClick={() => {
+                          setFieldValue("mediaUrl", "");
+                          setFieldValue("mediaType", "");
+                        }}
+                      >
+                        Quitar multimedia
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </DialogContent>
               <DialogActions>
                 <Button
                   onClick={handleClose}
                   color="secondary"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || uploadingMedia}
                   variant="outlined"
                 >
                   {i18n.t("quickAnswersModal.buttons.cancel")}
@@ -196,7 +270,7 @@ const QuickAnswersModal = ({
                 <Button
                   type="submit"
                   color="primary"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || uploadingMedia}
                   variant="contained"
                   className={classes.btnWrapper}
                 >

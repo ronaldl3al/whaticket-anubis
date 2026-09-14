@@ -15,10 +15,15 @@ export const initIO = (httpServer: Server): SocketIO => {
   });
 
   io.on("connection", socket => {
-    const { token } = socket.handshake.query;
+    const rawToken = socket.handshake.query?.token;
+    let tokenString = Array.isArray(rawToken) ? rawToken[0] : rawToken;
+    if (tokenString && typeof tokenString === "string") {
+      tokenString = tokenString.replace(/^"(.*)"$/, "$1").trim();
+    }
+
     let tokenData = null;
     try {
-      tokenData = verify(token, authConfig.secret);
+      tokenData = verify(tokenString, authConfig.secret);
       logger.debug(JSON.stringify(tokenData), "io-onConnection: tokenData");
     } catch (error) {
       logger.error(JSON.stringify(error), "Error decoding token");

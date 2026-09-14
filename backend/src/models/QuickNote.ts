@@ -10,23 +10,29 @@ import {
 } from "sequelize-typescript";
 
 @Table
-class QuickAnswer extends Model<QuickAnswer> {
+class QuickNote extends Model<QuickNote> {
   @PrimaryKey
   @AutoIncrement
   @Column
   id: number;
 
-  @Column(DataType.TEXT)
-  shortcut: string;
+  @Column(DataType.STRING)
+  title: string;
+
+  @Column(DataType.STRING)
+  category: string;
 
   @Column(DataType.TEXT)
-  message: string;
+  content: string;
 
   @Column(DataType.TEXT)
   mediaUrl: string;
 
   @Column(DataType.STRING)
   mediaType: string;
+
+  @Column(DataType.INTEGER)
+  userId: number;
 
   @CreatedAt
   createdAt: Date;
@@ -35,4 +41,4 @@ class QuickAnswer extends Model<QuickAnswer> {
   updatedAt: Date;
 }
 
-export default QuickAnswer;
+export default QuickNote;
