@@ -128,10 +128,13 @@ export const EvolutionApiProvider: WhatsappProvider = {
           enabled: true,
           url: webhookUrl,
           byEvents: false,
+          base64: true,
           events: [
             "MESSAGES_UPSERT",
             "MESSAGES_UPDATE",
             "MESSAGES_DELETE",
+            "SEND_MESSAGE",
+            "MESSAGES_SET",
             "CHATS_UPSERT",
             "CHATS_UPDATE",
             "CHATS_SET",

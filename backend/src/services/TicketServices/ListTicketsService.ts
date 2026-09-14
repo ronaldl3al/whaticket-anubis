@@ -56,11 +56,23 @@ const ListTicketsService = async ({
       model: Whatsapp,
       as: "whatsapp",
       attributes: ["name"]
+    },
+    {
+      model: Message,
+      as: "messages",
+      attributes: ["id", "body", "fromMe", "ack", "createdAt"],
+      limit: 1,
+      order: [["createdAt", "DESC"]],
+      separate: true
     }
   ];
 
   if (showAll === "true") {
-    whereCondition = { queueId: { [Op.or]: [queueIds, null] } };
+    if (queueIds && queueIds.length > 0) {
+      whereCondition = { queueId: { [Op.or]: [queueIds, null] } };
+    } else {
+      whereCondition = {};
+    }
   }
 
   if (status) {
@@ -122,14 +134,21 @@ const ListTicketsService = async ({
   }
 
   if (withUnreadMessages === "true") {
-    const user = await ShowUserService(userId);
-    const userQueueIds = user.queues.map(queue => queue.id);
+    if (showAll === "true") {
+      whereCondition = {
+        ...whereCondition,
+        unreadMessages: { [Op.gt]: 0 }
+      };
+    } else {
+      const user = await ShowUserService(userId);
+      const userQueueIds = user.queues.map(queue => queue.id);
 
-    whereCondition = {
-      [Op.or]: [{ userId }, { status: "pending" }],
-      queueId: { [Op.or]: [userQueueIds, null] },
-      unreadMessages: { [Op.gt]: 0 }
-    };
+      whereCondition = {
+        [Op.or]: [{ userId }, { status: "pending" }],
+        queueId: { [Op.or]: [userQueueIds, null] },
+        unreadMessages: { [Op.gt]: 0 }
+      };
+    }
   }
 
   const limit = 40;

@@ -8,6 +8,9 @@ import SearchIcon from "@material-ui/icons/Search";
 import WhatsAppIcon from "@material-ui/icons/WhatsApp";
 import LockIcon from "@material-ui/icons/Lock";
 import ArrowBackIcon from "@material-ui/icons/ArrowBack";
+import AccessTime from "@material-ui/icons/AccessTime";
+import Done from "@material-ui/icons/Done";
+import DoneAll from "@material-ui/icons/DoneAll";
 import IconButton from "@material-ui/core/IconButton";
 import CircularProgress from "@material-ui/core/CircularProgress";
 import { parseISO, format, isToday, isYesterday } from "date-fns";
@@ -624,13 +627,10 @@ const WhatsAppWebChat = () => {
 
       if (data.action === "update" && data.ticket && data.ticket.id) {
         setChats((prev) => {
-          const index = prev.findIndex((t) => t && t.id === data.ticket.id);
-          if (index !== -1) {
-            const updated = [...prev];
-            updated[index] = { ...updated[index], ...data.ticket };
-            return updated;
-          }
-          return [data.ticket, ...prev];
+          const others = prev.filter((t) => t && t.id !== data.ticket.id);
+          const existing = prev.find((t) => t && t.id === data.ticket.id);
+          const merged = { ...existing, ...data.ticket };
+          return [merged, ...others];
         });
         return;
       }
@@ -650,11 +650,12 @@ const WhatsAppWebChat = () => {
     };
 
     const onAppMessage = (data) => {
-      if (data && data.action === "create" && data.message) {
-        const msg = data.message;
-        const tId = msg.ticketId;
-        if (!tId) return;
+      if (!data || !data.message) return;
+      const msg = data.message;
+      const tId = msg.ticketId;
+      if (!tId) return;
 
+      if (data.action === "create") {
         setChats((prev) => {
           const index = prev.findIndex((t) => t && t.id === tId);
           if (index !== -1) {
@@ -664,16 +665,73 @@ const WhatsAppWebChat = () => {
             const updatedTicket = {
               ...current,
               lastMessage: msg.body || (msg.mediaType ? `[${msg.mediaType}]` : ""),
+              lastMessageObj: msg,
+              messages: [msg],
               updatedAt: msg.createdAt || new Date().toISOString(),
               unreadMessages: isCurrentActive ? 0 : ((Number(current.unreadMessages) || 0) + (msg.fromMe ? 0 : 1)),
             };
             const others = prev.filter((t) => t && t.id !== tId);
             return [updatedTicket, ...others];
+          } else {
+            api.get("/tickets", {
+              params: {
+                showAll: "true",
+                searchParam: searchParam.trim(),
+                withUnreadMessages: filter === "unread" ? "true" : "false",
+                pageNumber: 1,
+              },
+            }).then(({ data: d }) => {
+              if (d?.tickets) setChats(d.tickets);
+            }).catch(() => {});
+            return prev;
           }
-          return prev;
+        });
+      }
+
+      if (data.action === "update") {
+        setChats((prev) => {
+          return prev.map((c) => {
+            if (c && c.id === tId) {
+              const currentLastMsg = c.lastMessageObj || c.messages?.[0];
+              if (!currentLastMsg || currentLastMsg.id === msg.id) {
+                return {
+                  ...c,
+                  lastMessageObj: msg,
+                  messages: [msg]
+                };
+              }
+            }
+            return c;
+          });
         });
       }
     };
+
+    const onLocalMessage = (e) => {
+      try {
+        const msg = e.detail;
+        if (!msg || !msg.ticketId) return;
+        setChats((prev) => {
+          const index = prev.findIndex((t) => t && t.id === msg.ticketId);
+          if (index !== -1) {
+            const current = prev[index];
+            const updatedTicket = {
+              ...current,
+              lastMessage: msg.body || (msg.mediaType ? `[${msg.mediaType}]` : ""),
+              lastMessageObj: msg,
+              messages: [msg],
+              updatedAt: msg.createdAt || new Date().toISOString(),
+              unreadMessages: 0,
+            };
+            const others = prev.filter((t) => t && t.id !== msg.ticketId);
+            return [updatedTicket, ...others];
+          }
+          return prev;
+        });
+      } catch (err) {}
+    };
+
+    window.addEventListener("localMessageSent", onLocalMessage);
 
     socket.on("ticket", onTicket);
     socket.on("contact", onContact);
@@ -684,6 +742,7 @@ const WhatsAppWebChat = () => {
       socket.off("contact", onContact);
       socket.off("appMessage", onAppMessage);
       socket.off("connect", join);
+      window.removeEventListener("localMessageSent", onLocalMessage);
     };
   }, [ticketId]);
 
@@ -696,6 +755,26 @@ const WhatsAppWebChat = () => {
 
   const handleBackToChatList = () => {
     history.push("/chats");
+  };
+
+  const renderChatListAck = (chat) => {
+    const lastMsg = chat.lastMessageObj || chat.messages?.[0];
+    if (!lastMsg || !lastMsg.fromMe) return null;
+
+    const ack = Number(lastMsg.ack);
+    if (ack === 0) {
+      return <AccessTime style={{ fontSize: 16, color: "#8696a0", marginRight: 3, flexShrink: 0 }} />;
+    }
+    if (ack === 1) {
+      return <Done style={{ fontSize: 16, color: "#8696a0", marginRight: 3, flexShrink: 0 }} />;
+    }
+    if (ack === 2) {
+      return <DoneAll style={{ fontSize: 16, color: "#8696a0", marginRight: 3, flexShrink: 0 }} />;
+    }
+    if (ack >= 3) {
+      return <DoneAll style={{ fontSize: 16, color: "#53bdeb", marginRight: 3, flexShrink: 0 }} />;
+    }
+    return null;
   };
 
   return (
@@ -796,9 +875,12 @@ const WhatsAppWebChat = () => {
                         </Typography>
                       </div>
                       <div className={classes.chatDetailsBottom}>
-                        <Typography className={classes.chatMessageSnippet}>
-                          {typeof chat.lastMessage === "string" ? chat.lastMessage : (chat.lastMessage ? String(chat.lastMessage) : "Sin mensajes")}
-                        </Typography>
+                        <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1, overflow: "hidden" }}>
+                          {renderChatListAck(chat)}
+                          <Typography className={classes.chatMessageSnippet}>
+                            {typeof chat.lastMessage === "string" ? chat.lastMessage : (chat.lastMessage ? String(chat.lastMessage) : "Sin mensajes")}
+                          </Typography>
+                        </div>
                         {chat.unreadMessages > 0 && (
                           <div className={classes.unreadBadge}>
                             {chat.unreadMessages}

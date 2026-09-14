@@ -19,7 +19,28 @@ import {
   isValidContactName
 } from "../helpers/PhoneNumberUtils";
 
-const getMessageBody = (msg: any): string => {
+const unwrapMessage = (msg: any): any => {
+  if (!msg) return msg;
+  let unwrapped = msg;
+  while (
+    unwrapped &&
+    (unwrapped.ephemeralMessage ||
+      unwrapped.viewOnceMessage ||
+      unwrapped.viewOnceMessageV2 ||
+      unwrapped.documentWithCaptionMessage)
+  ) {
+    unwrapped =
+      unwrapped.ephemeralMessage?.message ||
+      unwrapped.viewOnceMessage?.message ||
+      unwrapped.viewOnceMessageV2?.message ||
+      unwrapped.documentWithCaptionMessage?.message ||
+      unwrapped;
+  }
+  return unwrapped;
+};
+
+const getMessageBody = (rawMsg: any): string => {
+  const msg = unwrapMessage(rawMsg);
   if (!msg) return "";
   if (typeof msg.conversation === "string") return msg.conversation;
   if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text;
@@ -33,7 +54,8 @@ const getMessageBody = (msg: any): string => {
   return "";
 };
 
-const getMediaType = (msg: any): string => {
+const getMediaType = (rawMsg: any): string => {
+  const msg = unwrapMessage(rawMsg);
   if (!msg) return "chat";
   if (msg.imageMessage) return "image";
   if (msg.videoMessage) return "video";
@@ -123,133 +145,171 @@ export const handleEvolutionWebhook = async (
         break;
       }
 
-      case "MESSAGES_UPSERT": {
-        const msg = payload.data?.message ? payload.data : (payload.data?.messages?.[0] || payload.data);
-        if (!msg || !msg.key) break;
-
-        const remoteJid = msg.key.remoteJid || "";
-        if (!remoteJid || remoteJid.includes("@broadcast") || remoteJid.endsWith("newsletter")) {
-          break;
+      case "MESSAGES_UPSERT":
+      case "MESSAGES_SET":
+      case "SEND_MESSAGE": {
+        let rawMessages: any[] = [];
+        if (Array.isArray(payload.data)) {
+          rawMessages = payload.data;
+        } else if (Array.isArray(payload.data?.messages)) {
+          rawMessages = payload.data.messages;
+        } else if (payload.data?.key || payload.data?.message) {
+          rawMessages = [payload.data];
+        } else if (payload.data) {
+          rawMessages = [payload.data];
         }
 
-        const isGroup = remoteJid.includes("@g.us");
-        const userPart = remoteJid.split("@")[0];
-        const rawNumber = cleanDigits(userPart) || userPart;
+        for (const rawMsg of rawMessages) {
+          if (!rawMsg || !rawMsg.key) continue;
 
-        const isLidContact = isLid(remoteJid) || isLid(rawNumber);
-        let cleanNumber = isLidContact ? rawNumber : normalizePhoneNumber(rawNumber);
-        if (!cleanNumber) cleanNumber = userPart;
+          const remoteJid = rawMsg.key.remoteJid || "";
+          if (!remoteJid || remoteJid.includes("@broadcast") || remoteJid.endsWith("newsletter")) {
+            continue;
+          }
 
-        const pushName = msg.pushName || "";
-        const candidateName = isValidContactName(pushName, cleanNumber, isLidContact ? remoteJid : null)
-          ? pushName.trim()
-          : cleanNumber;
+          const isGroup = remoteJid.includes("@g.us");
+          const userPart = remoteJid.split("@")[0];
+          const rawNumber = cleanDigits(userPart) || userPart;
 
-        const body = getMessageBody(msg.message);
-        const mediaType = getMediaType(msg.message);
-        const hasMedia = mediaType !== "chat";
+          const isLidContact = isLid(remoteJid) || isLid(rawNumber);
+          let cleanNumber = isLidContact ? rawNumber : normalizePhoneNumber(rawNumber);
+          if (!cleanNumber) cleanNumber = userPart;
 
-        // Extract Quoted Message Stanza ID if present
-        const quotedMsgId =
-          msg.message?.extendedTextMessage?.contextInfo?.stanzaId ||
-          msg.message?.imageMessage?.contextInfo?.stanzaId ||
-          msg.message?.videoMessage?.contextInfo?.stanzaId ||
-          msg.message?.audioMessage?.contextInfo?.stanzaId ||
-          msg.message?.documentMessage?.contextInfo?.stanzaId;
+          const pushName = rawMsg.pushName || "";
+          const candidateName = isValidContactName(pushName, cleanNumber, isLidContact ? remoteJid : null)
+            ? pushName.trim()
+            : cleanNumber;
 
-        let mediaPayload: MediaPayload | undefined;
-        if (hasMedia) {
-          let base64Data = payload.data?.base64 || msg.base64 || msg.media?.base64;
-          let filename = msg.mediaName || "";
-          let mimetype = msg.mediaType || "";
+          const realMsg = unwrapMessage(rawMsg.message);
+          const body = getMessageBody(realMsg);
+          const mediaType = getMediaType(realMsg);
+          const hasMedia = mediaType !== "chat";
 
-          // If base64 not yet present in webhook, download from Evolution API
-          if (!base64Data && msg.key?.id && wp) {
-            try {
-              const instName = payload.instance || wp.name;
-              const apiUrl = (process.env.EVOLUTION_API_URL || "http://localhost:8080").replace(/\/+$/, "");
-              const apiKey = process.env.EVOLUTION_API_KEY || "";
-              const mediaRes = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${encodeURIComponent(instName)}`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  apikey: apiKey,
-                  "api-key": apiKey
-                },
-                body: JSON.stringify({ message: { key: { id: msg.key.id } } })
-              });
-              if (mediaRes.ok) {
-                const resJson: any = await mediaRes.json().catch(() => ({}));
-                if (resJson?.base64) {
-                  base64Data = resJson.base64;
-                  if (resJson.fileName) filename = resJson.fileName;
-                  if (resJson.mimetype) mimetype = resJson.mimetype;
+          // Extract Quoted Message Stanza ID if present
+          const quotedMsgId =
+            realMsg?.extendedTextMessage?.contextInfo?.stanzaId ||
+            realMsg?.imageMessage?.contextInfo?.stanzaId ||
+            realMsg?.videoMessage?.contextInfo?.stanzaId ||
+            realMsg?.audioMessage?.contextInfo?.stanzaId ||
+            realMsg?.documentMessage?.contextInfo?.stanzaId;
+
+          let mediaPayload: MediaPayload | undefined;
+          if (hasMedia) {
+            let base64Data = payload.data?.base64 || rawMsg.base64 || rawMsg.media?.base64;
+            let filename = rawMsg.mediaName || "";
+            let mimetype = rawMsg.mediaType || "";
+
+            // If base64 not yet present in webhook, download from Evolution API
+            if (!base64Data && rawMsg.key?.id && wp) {
+              try {
+                const instName = payload.instance || wp.name;
+                const apiUrl = (process.env.EVOLUTION_API_URL || "http://localhost:8080").replace(/\/+$/, "");
+                const apiKey = process.env.EVOLUTION_API_KEY || "";
+                const mediaRes = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${encodeURIComponent(instName)}`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    apikey: apiKey,
+                    "api-key": apiKey
+                  },
+                  body: JSON.stringify({ message: { key: { id: rawMsg.key.id } } })
+                });
+                if (mediaRes.ok) {
+                  const resJson: any = await mediaRes.json().catch(() => ({}));
+                  if (resJson?.base64) {
+                    base64Data = resJson.base64;
+                    if (resJson.fileName) filename = resJson.fileName;
+                    if (resJson.mimetype) mimetype = resJson.mimetype;
+                  }
                 }
+              } catch (mediaErr) {
+                logger.error("Error fetching media from Evolution API:", mediaErr);
               }
-            } catch (mediaErr) {
-              logger.error("Error fetching media from Evolution API:", mediaErr);
+            }
+
+            if (base64Data) {
+              const cleanBase64 = String(base64Data).replace(/^data:[^;]+;base64,/, "");
+              if (!mimetype) {
+                if (mediaType === "image") mimetype = "image/jpeg";
+                else if (mediaType === "audio") mimetype = "audio/ogg";
+                else if (mediaType === "video") mimetype = "video/mp4";
+                else mimetype = "application/octet-stream";
+              }
+              if (!filename) {
+                const ext = mimetype.split("/")[1] || "bin";
+                filename = `${mediaType}_${Date.now()}.${ext}`;
+              }
+              mediaPayload = {
+                filename,
+                mimetype,
+                data: cleanBase64
+              };
             }
           }
 
-          if (base64Data) {
-            const cleanBase64 = String(base64Data).replace(/^data:[^;]+;base64,/, "");
-            if (!mimetype) {
-              if (mediaType === "image") mimetype = "image/jpeg";
-              else if (mediaType === "audio") mimetype = "audio/ogg";
-              else if (mediaType === "video") mimetype = "video/mp4";
-              else mimetype = "application/octet-stream";
-            }
-            if (!filename) {
-              const ext = mimetype.split("/")[1] || "bin";
-              filename = `${mediaType}_${Date.now()}.${ext}`;
-            }
-            mediaPayload = {
-              filename,
-              mimetype,
-              data: cleanBase64
-            };
-          }
+          let ack: 0 | 1 | 2 | 3 | 4 = 0;
+          const rawStatus = rawMsg.status ?? rawMsg.update?.status;
+          if (rawStatus === 3 || rawStatus === "READ" || rawStatus === "READ_ACK" || rawStatus === "VIEWED") ack = 3;
+          else if (rawStatus === 2 || rawStatus === "DELIVERY_ACK" || rawStatus === "DELIVERED" || rawStatus === "RECEIPT") ack = 2;
+          else if (rawStatus === 4 || rawStatus === "PLAYED") ack = 4;
+          else if (rawStatus === 1 || rawStatus === "SERVER_ACK" || rawStatus === "SENT") ack = 1;
+          else if (rawMsg.key.fromMe) ack = 1;
+
+          const messagePayload: MessagePayload = {
+            id: rawMsg.key.id || `evo_${Date.now()}`,
+            body: body || (hasMedia ? `[${mediaType}]` : ""),
+            fromMe: Boolean(rawMsg.key.fromMe),
+            hasMedia,
+            type: mediaType as any,
+            timestamp: Number(rawMsg.messageTimestamp) || Math.floor(Date.now() / 1000),
+            from: remoteJid,
+            to: rawMsg.key.fromMe ? remoteJid : "me",
+            quotedMsgId,
+            mediaType: hasMedia ? mediaType : undefined,
+            ack
+          };
+
+          const contactPayload: ContactPayload = {
+            name: candidateName,
+            number: cleanNumber,
+            lid: isLidContact ? remoteJid : undefined,
+            isGroup
+          };
+
+          const contextPayload: WhatsappContextPayload = {
+            whatsappId: wp?.id || 1,
+            unreadMessages: rawMsg.key.fromMe ? 0 : 1
+          };
+
+          logger.info(`[EVOLUTION_WEBHOOK] Processing message ${messagePayload.id} from ${remoteJid} (fromMe: ${messagePayload.fromMe})`);
+          await handleMessage(messagePayload, contactPayload, contextPayload, mediaPayload);
         }
-
-        const messagePayload: MessagePayload = {
-          id: msg.key.id || `evo_${Date.now()}`,
-          body: body || (hasMedia ? `[${mediaType}]` : ""),
-          fromMe: Boolean(msg.key.fromMe),
-          hasMedia,
-          type: mediaType as any,
-          timestamp: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
-          from: remoteJid,
-          to: msg.key.fromMe ? remoteJid : "me",
-          quotedMsgId,
-          mediaType: hasMedia ? mediaType : undefined
-        };
-
-        const contactPayload: ContactPayload = {
-          name: candidateName,
-          number: cleanNumber,
-          lid: isLidContact ? remoteJid : undefined,
-          isGroup
-        };
-
-        const contextPayload: WhatsappContextPayload = {
-          whatsappId: wp?.id || 1,
-          unreadMessages: msg.key.fromMe ? 0 : 1
-        };
-
-        await handleMessage(messagePayload, contactPayload, contextPayload, mediaPayload);
         break;
       }
 
       case "MESSAGES_UPDATE": {
-        const updates = Array.isArray(payload.data) ? payload.data : [payload.data];
+        let updates: any[] = [];
+        if (Array.isArray(payload.data)) {
+          updates = payload.data;
+        } else if (Array.isArray(payload.data?.messages)) {
+          updates = payload.data.messages;
+        } else if (payload.data) {
+          updates = [payload.data];
+        }
+
         for (const item of updates) {
-          const keyId = item?.key?.id;
-          const status = item?.update?.status;
+          if (!item) continue;
+          const keyId = item.key?.id || item.id || item.keyId;
+          const status = item.update?.status ?? item.status ?? item.receipt;
           if (keyId && status !== undefined) {
             let ack: 0 | 1 | 2 | 3 | 4 = 1;
-            if (status === 3 || status === "READ") ack = 3;
-            else if (status === 2 || status === "DELIVERY_ACK") ack = 2;
+            if (status === 3 || status === "READ" || status === "READ_ACK" || status === "VIEWED") ack = 3;
+            else if (status === 2 || status === "DELIVERY_ACK" || status === "DELIVERED" || status === "RECEIPT") ack = 2;
             else if (status === 4 || status === "PLAYED") ack = 4;
+            else if (status === 0 || status === "PENDING") ack = 0;
+            else if (status === 1 || status === "SERVER_ACK" || status === "SENT") ack = 1;
+
+            logger.info(`[EVOLUTION_WEBHOOK] Updating ACK for message ${keyId} -> ${ack} (status: ${status})`);
             await handleMessageAck(keyId, ack);
           }
         }

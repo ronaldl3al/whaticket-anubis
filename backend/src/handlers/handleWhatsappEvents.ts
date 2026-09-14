@@ -11,6 +11,7 @@ import formatBody from "../helpers/Mustache";
 import Contact from "../models/Contact";
 import Ticket from "../models/Ticket";
 import Message from "../models/Message";
+import { Op } from "sequelize";
 
 import CreateMessageService from "../services/MessageServices/CreateMessageService";
 import CreateOrUpdateContactService from "../services/ContactServices/CreateOrUpdateContactService";
@@ -333,12 +334,12 @@ export const handleMessageAck = async (
   messageId: string,
   ack: MessageAck
 ): Promise<void> => {
-  await new Promise(r => setTimeout(r, 500));
+  await new Promise(r => setTimeout(r, 200));
 
   const io = getIO();
 
   try {
-    const messageToUpdate = await Message.findByPk(messageId, {
+    let messageToUpdate = await Message.findByPk(messageId, {
       include: [
         "contact",
         {
@@ -350,15 +351,57 @@ export const handleMessageAck = async (
     });
 
     if (!messageToUpdate) {
+      messageToUpdate = await Message.findOne({
+        where: { id: { [Op.like]: `%${messageId}%` } },
+        include: [
+          "contact",
+          {
+            model: Message,
+            as: "quotedMsg",
+            include: ["contact"]
+          }
+        ]
+      });
+    }
+
+    if (!messageToUpdate) {
       return;
     }
 
     await messageToUpdate.update({ ack });
 
-    io.to(messageToUpdate.ticketId.toString()).emit("appMessage", {
-      action: "update",
-      message: messageToUpdate
+    io.to(messageToUpdate.ticketId.toString())
+      .to("notification")
+      .emit("appMessage", {
+        action: "update",
+        message: messageToUpdate
+      });
+
+    const ticket = await Ticket.findByPk(messageToUpdate.ticketId, {
+      include: [
+        "contact",
+        "queue",
+        "whatsapp",
+        {
+          model: Message,
+          as: "messages",
+          attributes: ["id", "body", "fromMe", "ack", "createdAt"],
+          limit: 1,
+          order: [["createdAt", "DESC"]],
+          separate: true
+        }
+      ]
     });
+
+    if (ticket) {
+      io.to(ticket.status)
+        .to("notification")
+        .to(ticket.id.toString())
+        .emit("ticket", {
+          action: "update",
+          ticket
+        });
+    }
   } catch (err) {
     Sentry.captureException(err);
     logger.error(`Error handling message ack: ${err}`);

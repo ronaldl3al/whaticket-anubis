@@ -10,25 +10,30 @@ const FindOrCreateTicketService = async (
   unreadMessages: number,
   groupContact?: Contact
 ): Promise<Ticket> => {
+  const targetContactId = groupContact ? groupContact.id : contact.id;
+
   let ticket = await Ticket.findOne({
     where: {
       status: {
         [Op.or]: ["open", "pending"]
       },
-      contactId: groupContact ? groupContact.id : contact.id,
-      whatsappId: whatsappId
-    }
+      contactId: targetContactId
+    },
+    order: [["updatedAt", "DESC"]]
   });
 
   if (ticket) {
-    await ticket.update({ unreadMessages });
+    const newUnread = unreadMessages === 0 ? 0 : ((ticket.unreadMessages || 0) + unreadMessages);
+    await ticket.update({
+      unreadMessages: newUnread,
+      whatsappId: whatsappId || ticket.whatsappId
+    });
   }
 
-  if (!ticket && groupContact) {
+  if (!ticket) {
     ticket = await Ticket.findOne({
       where: {
-        contactId: groupContact.id,
-        whatsappId: whatsappId
+        contactId: targetContactId
       },
       order: [["updatedAt", "DESC"]]
     });
@@ -36,31 +41,15 @@ const FindOrCreateTicketService = async (
     if (ticket) {
       await ticket.update({
         status: "open",
-        unreadMessages
-      });
-    }
-  }
-
-  if (!ticket && !groupContact) {
-    ticket = await Ticket.findOne({
-      where: {
-        contactId: contact.id,
-        whatsappId: whatsappId
-      },
-      order: [["updatedAt", "DESC"]]
-    });
-
-    if (ticket) {
-      await ticket.update({
-        status: "open",
-        unreadMessages
+        unreadMessages,
+        whatsappId: whatsappId || ticket.whatsappId
       });
     }
   }
 
   if (!ticket) {
     ticket = await Ticket.create({
-      contactId: groupContact ? groupContact.id : contact.id,
+      contactId: targetContactId,
       status: "open",
       isGroup: !!groupContact,
       unreadMessages,

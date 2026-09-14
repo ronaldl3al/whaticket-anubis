@@ -214,6 +214,8 @@ const useStyles = makeStyles((theme) => ({
     bottom: 0,
     right: 5,
     color: "#8696a0",
+    display: "flex",
+    alignItems: "center",
   },
 
   dailyTimestamp: {
@@ -236,9 +238,9 @@ const useStyles = makeStyles((theme) => ({
   },
 
   ackIcons: {
-    fontSize: 18,
+    fontSize: 16,
     verticalAlign: "middle",
-    marginLeft: 4,
+    marginLeft: 3,
     color: "#8696a0",
   },
 
@@ -250,9 +252,9 @@ const useStyles = makeStyles((theme) => ({
 
   ackDoneAllIcon: {
     color: "#53bdeb",
-    fontSize: 18,
+    fontSize: 16,
     verticalAlign: "middle",
-    marginLeft: 4,
+    marginLeft: 3,
   },
 
   downloadMedia: {
@@ -553,6 +555,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
   };
 
   const renderMessageAck = (message) => {
+    if (!message || !message.fromMe) return null;
     if (message.ack === 0) {
       return <AccessTime fontSize="small" className={classes.ackIcons} />;
     }
@@ -565,6 +568,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
     if (message.ack === 3 || message.ack === 4) {
       return <DoneAll fontSize="small" className={classes.ackDoneAllIcon} />;
     }
+    return null;
   };
 
   const renderDailyTimestamps = (message, index) => {
