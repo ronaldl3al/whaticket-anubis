@@ -78,6 +78,11 @@ const MainListItems = (props) => {
         icon={<DashboardOutlinedIcon />}
       />
       <ListItemLink
+        to="/chats"
+        primary="Chats"
+        icon={<WhatsAppIcon style={{ color: "#25D366" }} />}
+      />
+      <ListItemLink
         to="/connections"
         primary={i18n.t("mainDrawer.listItems.connections")}
         icon={

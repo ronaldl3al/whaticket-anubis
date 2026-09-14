@@ -145,6 +145,14 @@ export const EvolutionApiProvider: WhatsappProvider = {
       }
     });
 
+    // 2.5 Ensure readMessages setting is enabled so native phone notifications clear on read
+    await evolutionFetch(`/settings/set/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      body: {
+        readMessages: true
+      }
+    });
+
     // 3. Check connection status
     const connStateRes = await evolutionFetch(`/instance/connectionState/${encodeURIComponent(instanceName)}`);
     const state =
@@ -512,14 +520,57 @@ export const EvolutionApiProvider: WhatsappProvider = {
     return Array.from(contactMap.values());
   },
 
-  sendSeen: async (sessionId: number, chatId: string): Promise<void> => {
+  sendSeen: async (
+    sessionId: number,
+    chatId: string,
+    messageIds?: string[]
+  ): Promise<void> => {
     const instanceName = await resolveInstanceName({ id: sessionId });
-    await evolutionFetch(`/chat/markMessageAsRead/${encodeURIComponent(instanceName)}`, {
-      method: "POST",
-      body: {
-        readMessages: [{ remoteJid: chatId }]
-      }
-    });
+
+    let destination = chatId;
+    if (chatId.includes("@c.us")) {
+      destination = chatId.replace("@c.us", "@s.whatsapp.net");
+    } else if (!chatId.includes("@")) {
+      destination = `${chatId}@s.whatsapp.net`;
+    }
+
+    let ids = messageIds ? [...messageIds] : [];
+
+    // If no specific message IDs were passed, find the most recent incoming message
+    if (ids.length === 0) {
+      try {
+        const findRes = await evolutionFetch(`/chat/findMessages/${encodeURIComponent(instanceName)}`, {
+          method: "POST",
+          body: {
+            where: {
+              key: {
+                remoteJid: destination,
+                fromMe: false
+              }
+            },
+            limit: 3
+          }
+        });
+        const records = findRes.data?.messages?.records || findRes.data?.messages || findRes.data || [];
+        if (Array.isArray(records) && records.length > 0) {
+          ids = records.map((r: any) => r.key?.id).filter(Boolean);
+        }
+      } catch {}
+    }
+
+    if (ids.length > 0) {
+      const readMessages = ids.map(id => ({
+        id,
+        fromMe: false,
+        remoteJid: destination
+      }));
+
+      await evolutionFetch(`/chat/markMessageAsRead/${encodeURIComponent(instanceName)}`, {
+        method: "POST",
+        body: { readMessages }
+      });
+      logger.info(`[EVOLUTION] Marked ${readMessages.length} messages as read for ${destination}`);
+    }
   },
 
   fetchChatMessages: async (

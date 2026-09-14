@@ -5,6 +5,19 @@ import { logger } from "../utils/logger";
 import { whatsappProvider } from "../providers/WhatsApp";
 
 const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
+  let unreadIds: string[] = [];
+  try {
+    const unreadMsgs = await Message.findAll({
+      where: {
+        ticketId: ticket.id,
+        read: false,
+        fromMe: false
+      },
+      attributes: ["id"]
+    });
+    unreadIds = unreadMsgs.map(m => m.id);
+  } catch {}
+
   await Message.update(
     { read: true },
     {
@@ -19,9 +32,14 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
 
   try {
     if (ticket.whatsappId) {
+      const chatId = ticket.contact.lid
+        ? ticket.contact.lid
+        : `${ticket.contact.number}@${ticket.isGroup ? "g" : "c"}.us`;
+
       await whatsappProvider.sendSeen(
         ticket.whatsappId,
-        `${ticket.contact.number}@${ticket.isGroup ? "g" : "c"}.us`
+        chatId,
+        unreadIds
       );
     }
   } catch (err) {
