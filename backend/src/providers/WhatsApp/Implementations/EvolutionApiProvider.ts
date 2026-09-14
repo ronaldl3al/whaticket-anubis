@@ -213,7 +213,9 @@ export const EvolutionApiProvider: WhatsappProvider = {
     const instanceName = await resolveInstanceName({ id: sessionId });
 
     let destination = to;
-    if (!to.includes("@g.us")) {
+    if (to.includes("@lid")) {
+      destination = to;
+    } else if (!to.includes("@g.us")) {
       const userPart = to.split("@")[0];
       destination = normalizePhoneNumber(userPart) || cleanDigits(userPart);
     }
@@ -228,11 +230,12 @@ export const EvolutionApiProvider: WhatsappProvider = {
     };
 
     if (options?.quotedMessageId) {
-      payload.options.quoted = {
+      payload.quoted = {
         key: {
           id: options.quotedMessageId
         }
       };
+      payload.options.quoted = payload.quoted;
     }
 
     const res = await evolutionFetch(`/message/sendText/${encodeURIComponent(instanceName)}`, {
@@ -267,29 +270,35 @@ export const EvolutionApiProvider: WhatsappProvider = {
     const instanceName = await resolveInstanceName({ id: sessionId });
 
     let destination = to;
-    if (!to.includes("@g.us")) {
+    if (to.includes("@lid")) {
+      destination = to;
+    } else if (!to.includes("@g.us")) {
       const userPart = to.split("@")[0];
       destination = normalizePhoneNumber(userPart) || cleanDigits(userPart);
     }
 
     const mimetype = media.mimetype || "";
-    const isAudio = mimetype.includes("audio") || mimetype.includes("ogg") || mimetype.includes("opus");
+    const isAudio =
+      mimetype.includes("audio") ||
+      mimetype.includes("ogg") ||
+      mimetype.includes("opus") ||
+      mimetype.includes("mp3");
 
     let mediaBase64 = "";
     if (media.data && Buffer.isBuffer(media.data)) {
-      mediaBase64 = `data:${mimetype};base64,${media.data.toString("base64")}`;
+      mediaBase64 = media.data.toString("base64");
     } else if (media.path) {
       const fs = require("fs");
       try {
         const fileBuf = fs.readFileSync(media.path);
-        mediaBase64 = `data:${mimetype};base64,${fileBuf.toString("base64")}`;
+        mediaBase64 = fileBuf.toString("base64");
       } catch {}
     } else if ((media as any).data) {
       const raw = String((media as any).data);
-      if (raw.startsWith("data:") || raw.startsWith("http")) {
+      if (raw.startsWith("http://") || raw.startsWith("https://")) {
         mediaBase64 = raw;
       } else {
-        mediaBase64 = `data:${mimetype};base64,${raw}`;
+        mediaBase64 = raw.replace(/^data:[^;]+;base64,/, "");
       }
     }
 
@@ -317,10 +326,35 @@ export const EvolutionApiProvider: WhatsappProvider = {
       };
     }
 
-    const res = await evolutionFetch(endpoint, {
+    if (options?.quotedMessageId) {
+      payload.quoted = {
+        key: {
+          id: options.quotedMessageId
+        }
+      };
+    }
+
+    let res = await evolutionFetch(endpoint, {
       method: "POST",
       body: payload
     });
+
+    // If sendWhatsAppAudio fails, fallback to sendMedia with mediatype: "audio"
+    if (!res.ok && isAudio) {
+      logger.warn(`[EVOLUTION] sendWhatsAppAudio failed, attempting fallback to sendMedia for ${instanceName}`);
+      res = await evolutionFetch(`/message/sendMedia/${encodeURIComponent(instanceName)}`, {
+        method: "POST",
+        body: {
+          number: destination,
+          mediatype: "audio",
+          mimetype: mimetype || "audio/ogg",
+          media: mediaBase64,
+          fileName: media.filename || "audio.ogg",
+          caption: options?.caption || "",
+          ...(options?.quotedMessageId ? { quoted: { key: { id: options.quotedMessageId } } } : {})
+        }
+      });
+    }
 
     if (!res.ok) {
       logger.error({ info: "Evolution API sendMedia failed", res });
@@ -506,17 +540,45 @@ export const EvolutionApiProvider: WhatsappProvider = {
       }
     });
 
-    const messages = Array.isArray(res.data) ? res.data : (res.data?.messages || []);
-    return messages.map((m: any) => ({
-      id: m.key?.id || "",
-      body: m.message?.conversation || m.message?.extendedTextMessage?.text || "",
-      fromMe: Boolean(m.key?.fromMe),
-      hasMedia: Boolean(m.message?.imageMessage || m.message?.videoMessage || m.message?.audioMessage || m.message?.documentMessage),
-      type: m.messageType || "chat",
-      timestamp: m.messageTimestamp || Math.floor(Date.now() / 1000),
-      from: m.key?.remoteJid || "",
-      to: m.key?.fromMe ? m.key?.remoteJid : "me"
-    }));
+    const messages = Array.isArray(res.data)
+      ? res.data
+      : (Array.isArray(res.data?.messages)
+        ? res.data.messages
+        : (res.data?.messages?.records || []));
+
+    return messages.map((m: any) => {
+      const isMedia = Boolean(
+        m.message?.imageMessage ||
+        m.message?.videoMessage ||
+        m.message?.audioMessage ||
+        m.message?.documentMessage
+      );
+      let mType = m.messageType || "chat";
+      if (m.message?.imageMessage) mType = "image";
+      else if (m.message?.audioMessage) mType = "audio";
+      else if (m.message?.videoMessage) mType = "video";
+      else if (m.message?.documentMessage) mType = "document";
+
+      const body =
+        m.message?.conversation ||
+        m.message?.extendedTextMessage?.text ||
+        m.message?.imageMessage?.caption ||
+        m.message?.videoMessage?.caption ||
+        m.message?.documentMessage?.caption ||
+        m.message?.documentMessage?.fileName ||
+        (isMedia ? `[${mType}]` : "");
+
+      return {
+        id: m.key?.id || "",
+        body,
+        fromMe: Boolean(m.key?.fromMe),
+        hasMedia: isMedia,
+        type: mType as any,
+        timestamp: m.messageTimestamp || Math.floor(Date.now() / 1000),
+        from: m.key?.remoteJid || "",
+        to: m.key?.fromMe ? m.key?.remoteJid : "me"
+      };
+    });
   }
 };
 

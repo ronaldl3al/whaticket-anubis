@@ -45,12 +45,31 @@ const getMediaType = (msg: any): string => {
   return "chat";
 };
 
+const resolveWhatsappRecord = async (sessionId?: string, payload?: any): Promise<Whatsapp | null> => {
+  const parsedId = Number(sessionId);
+  if (parsedId && !isNaN(parsedId)) {
+    const wp = await Whatsapp.findByPk(parsedId);
+    if (wp) return wp;
+  }
+
+  const instName = payload?.instance || payload?.data?.instance || payload?.instanceName;
+  if (instName) {
+    const wp = await Whatsapp.findOne({
+      where: {
+        name: instName
+      }
+    });
+    if (wp) return wp;
+  }
+
+  return (await Whatsapp.findOne({ where: { default: true } })) || (await Whatsapp.findOne());
+};
+
 export const handleEvolutionWebhook = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
   const { sessionId } = req.params;
-  const whatsappId = Number(sessionId);
   const payload = req.body;
 
   if (!payload || !payload.event) {
@@ -61,6 +80,8 @@ export const handleEvolutionWebhook = async (
   const io = getIO();
 
   try {
+    const wp = await resolveWhatsappRecord(sessionId, payload);
+
     switch (eventName) {
       case "QRCODE_UPDATED": {
         const qrData =
@@ -70,35 +91,34 @@ export const handleEvolutionWebhook = async (
           payload.data?.code ||
           "";
 
-        if (qrData && whatsappId) {
-          const wp = await Whatsapp.findByPk(whatsappId);
-          if (wp) {
-            await wp.update({ status: "qrcode", qrcode: qrData });
-            io.emit("whatsappSession", { action: "update", session: wp });
-            io.emit("whatsapp", { action: "update", whatsapp: wp });
-            logger.info(`[EVOLUTION_WEBHOOK] QR Code updated for session ${whatsappId}`);
-          }
+        if (qrData && wp) {
+          await wp.update({ status: "qrcode", qrcode: qrData });
+          io.emit("whatsappSession", { action: "update", session: wp });
+          io.emit("whatsapp", { action: "update", whatsapp: wp });
+          logger.info(`[EVOLUTION_WEBHOOK] QR Code updated for session ${wp.id}`);
         }
         break;
       }
 
       case "CONNECTION_UPDATE": {
-        const state = payload.data?.state || payload.data?.status || "";
-        if (whatsappId) {
-          const wp = await Whatsapp.findByPk(whatsappId);
-          if (wp) {
-            if (state === "open") {
-              await wp.update({ status: "CONNECTED", qrcode: "", retries: 0 });
-              logger.info(`[EVOLUTION_WEBHOOK] Session ${whatsappId} CONNECTED`);
-            } else if (state === "close") {
-              await wp.update({ status: "DISCONNECTED", qrcode: "" });
-              logger.info(`[EVOLUTION_WEBHOOK] Session ${whatsappId} DISCONNECTED`);
-            } else if (state === "connecting") {
-              await wp.update({ status: "OPENING" });
-            }
-            io.emit("whatsappSession", { action: "update", session: wp });
-            io.emit("whatsapp", { action: "update", whatsapp: wp });
+        const state =
+          payload.data?.state ||
+          payload.data?.status ||
+          payload.data?.connectionStatus ||
+          "";
+
+        if (wp) {
+          if (state === "open") {
+            await wp.update({ status: "CONNECTED", qrcode: "", retries: 0 });
+            logger.info(`[EVOLUTION_WEBHOOK] Session ${wp.id} CONNECTED`);
+          } else if (state === "close") {
+            await wp.update({ status: "DISCONNECTED", qrcode: "" });
+            logger.info(`[EVOLUTION_WEBHOOK] Session ${wp.id} DISCONNECTED`);
+          } else if (state === "connecting") {
+            await wp.update({ status: "OPENING" });
           }
+          io.emit("whatsappSession", { action: "update", session: wp });
+          io.emit("whatsapp", { action: "update", whatsapp: wp });
         }
         break;
       }
@@ -116,15 +136,80 @@ export const handleEvolutionWebhook = async (
         const userPart = remoteJid.split("@")[0];
         const rawNumber = cleanDigits(userPart) || userPart;
 
-        if (isLid(remoteJid) || isLid(rawNumber)) break;
+        const isLidContact = isLid(remoteJid) || isLid(rawNumber);
+        let cleanNumber = isLidContact ? rawNumber : normalizePhoneNumber(rawNumber);
+        if (!cleanNumber) cleanNumber = userPart;
 
-        const cleanNumber = normalizePhoneNumber(rawNumber);
         const pushName = msg.pushName || "";
-        const candidateName = isValidContactName(pushName, cleanNumber) ? pushName.trim() : cleanNumber;
+        const candidateName = isValidContactName(pushName, cleanNumber, isLidContact ? remoteJid : null)
+          ? pushName.trim()
+          : cleanNumber;
 
         const body = getMessageBody(msg.message);
         const mediaType = getMediaType(msg.message);
         const hasMedia = mediaType !== "chat";
+
+        // Extract Quoted Message Stanza ID if present
+        const quotedMsgId =
+          msg.message?.extendedTextMessage?.contextInfo?.stanzaId ||
+          msg.message?.imageMessage?.contextInfo?.stanzaId ||
+          msg.message?.videoMessage?.contextInfo?.stanzaId ||
+          msg.message?.audioMessage?.contextInfo?.stanzaId ||
+          msg.message?.documentMessage?.contextInfo?.stanzaId;
+
+        let mediaPayload: MediaPayload | undefined;
+        if (hasMedia) {
+          let base64Data = payload.data?.base64 || msg.base64 || msg.media?.base64;
+          let filename = msg.mediaName || "";
+          let mimetype = msg.mediaType || "";
+
+          // If base64 not yet present in webhook, download from Evolution API
+          if (!base64Data && msg.key?.id && wp) {
+            try {
+              const instName = payload.instance || wp.name;
+              const apiUrl = (process.env.EVOLUTION_API_URL || "http://localhost:8080").replace(/\/+$/, "");
+              const apiKey = process.env.EVOLUTION_API_KEY || "";
+              const mediaRes = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${encodeURIComponent(instName)}`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  apikey: apiKey,
+                  "api-key": apiKey
+                },
+                body: JSON.stringify({ message: { key: { id: msg.key.id } } })
+              });
+              if (mediaRes.ok) {
+                const resJson: any = await mediaRes.json().catch(() => ({}));
+                if (resJson?.base64) {
+                  base64Data = resJson.base64;
+                  if (resJson.fileName) filename = resJson.fileName;
+                  if (resJson.mimetype) mimetype = resJson.mimetype;
+                }
+              }
+            } catch (mediaErr) {
+              logger.error("Error fetching media from Evolution API:", mediaErr);
+            }
+          }
+
+          if (base64Data) {
+            const cleanBase64 = String(base64Data).replace(/^data:[^;]+;base64,/, "");
+            if (!mimetype) {
+              if (mediaType === "image") mimetype = "image/jpeg";
+              else if (mediaType === "audio") mimetype = "audio/ogg";
+              else if (mediaType === "video") mimetype = "video/mp4";
+              else mimetype = "application/octet-stream";
+            }
+            if (!filename) {
+              const ext = mimetype.split("/")[1] || "bin";
+              filename = `${mediaType}_${Date.now()}.${ext}`;
+            }
+            mediaPayload = {
+              filename,
+              mimetype,
+              data: cleanBase64
+            };
+          }
+        }
 
         const messagePayload: MessagePayload = {
           id: msg.key.id || `evo_${Date.now()}`,
@@ -135,28 +220,21 @@ export const handleEvolutionWebhook = async (
           timestamp: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
           from: remoteJid,
           to: msg.key.fromMe ? remoteJid : "me",
+          quotedMsgId,
           mediaType: hasMedia ? mediaType : undefined
         };
 
         const contactPayload: ContactPayload = {
           name: candidateName,
-          number: cleanNumber || userPart,
+          number: cleanNumber,
+          lid: isLidContact ? remoteJid : undefined,
           isGroup
         };
 
         const contextPayload: WhatsappContextPayload = {
-          whatsappId: whatsappId || 1,
+          whatsappId: wp?.id || 1,
           unreadMessages: msg.key.fromMe ? 0 : 1
         };
-
-        let mediaPayload: MediaPayload | undefined;
-        if (hasMedia && msg.mediaUrl) {
-          mediaPayload = {
-            filename: msg.mediaName || "attachment",
-            mimetype: msg.mediaType || "application/octet-stream",
-            data: msg.mediaUrl
-          };
-        }
 
         await handleMessage(messagePayload, contactPayload, contextPayload, mediaPayload);
         break;

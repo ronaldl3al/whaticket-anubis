@@ -4,6 +4,7 @@ import Ticket from "../../models/Ticket";
 import { whatsappProvider, ProviderMessage } from "../../providers/WhatsApp";
 
 import formatBody from "../../helpers/Mustache";
+import CreateMessageService from "../MessageServices/CreateMessageService";
 
 interface Request {
   body: string;
@@ -35,10 +36,11 @@ const SendWhatsAppMessage = async ({
   }
 
   try {
+    const formattedBody = formatBody(body, ticket.contact);
     const sentMessage = await whatsappProvider.sendMessage(
       ticket.whatsappId,
       chatId,
-      formatBody(body, ticket.contact),
+      formattedBody,
       {
         quotedMessageId: quotedMsg?.id,
         quotedMessageFromMe: quotedMsg?.fromMe,
@@ -47,6 +49,25 @@ const SendWhatsAppMessage = async ({
     );
 
     await ticket.update({ lastMessage: body });
+
+    try {
+      await CreateMessageService({
+        messageData: {
+          id: sentMessage.id,
+          ticketId: ticket.id,
+          contactId: undefined,
+          body: formattedBody,
+          fromMe: true,
+          read: true,
+          mediaType: "chat",
+          quotedMsgId: quotedMsg?.id,
+          ack: 1
+        }
+      });
+    } catch (saveErr) {
+      console.error("Error creating outgoing message record:", saveErr);
+    }
+
     return sentMessage;
   } catch (err) {
     console.error("DEBUG_SEND_ERROR:", err);

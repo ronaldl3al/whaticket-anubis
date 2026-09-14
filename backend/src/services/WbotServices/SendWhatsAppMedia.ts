@@ -1,4 +1,3 @@
-import fs from "fs";
 import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider, ProviderMessage } from "../../providers/WhatsApp";
@@ -6,6 +5,7 @@ import { whatsappProvider, ProviderMessage } from "../../providers/WhatsApp";
 import formatBody from "../../helpers/Mustache";
 
 import Message from "../../models/Message";
+import CreateMessageService from "../MessageServices/CreateMessageService";
 
 interface Request {
   media: Express.Multer.File;
@@ -64,7 +64,39 @@ const SendWhatsAppMedia = async ({
 
     await ticket.update({ lastMessage: body || media.filename });
 
-    fs.unlinkSync(media.path);
+    let mediaType = "document";
+    const mime = media.mimetype || "";
+    if (mime.startsWith("image/")) {
+      mediaType = "image";
+    } else if (mime.startsWith("video/")) {
+      mediaType = "video";
+    } else if (
+      mime.includes("audio") ||
+      mime.includes("ogg") ||
+      mime.includes("opus") ||
+      mime.includes("mp3")
+    ) {
+      mediaType = "audio";
+    }
+
+    try {
+      await CreateMessageService({
+        messageData: {
+          id: sentMessage.id,
+          ticketId: ticket.id,
+          contactId: undefined,
+          body: hasBody || media.filename,
+          fromMe: true,
+          read: true,
+          mediaType,
+          mediaUrl: media.filename,
+          quotedMsgId: quotedMsg?.id,
+          ack: 1
+        }
+      });
+    } catch (saveErr) {
+      console.error("Error creating outgoing media message record:", saveErr);
+    }
 
     return sentMessage;
   } catch (err) {
