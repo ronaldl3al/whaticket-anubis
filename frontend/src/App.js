@@ -32,11 +32,13 @@ const App = () => {
 
   useEffect(() => {
     const i18nlocale = localStorage.getItem("i18nextLng");
-    const browserLocale =
-      i18nlocale.substring(0, 2) + i18nlocale.substring(3, 5);
+    if (i18nlocale && i18nlocale.length >= 5) {
+      const browserLocale =
+        i18nlocale.substring(0, 2) + i18nlocale.substring(3, 5);
 
-    if (browserLocale === "ptBR") {
-      setLocale(ptBR);
+      if (browserLocale === "ptBR") {
+        setLocale(ptBR);
+      }
     }
   }, []);
 

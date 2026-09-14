@@ -187,27 +187,31 @@ const TicketListItem = ({ ticket }) => {
 								variant="body2"
 								color="textPrimary"
 							>
-								{ticket.contact.name}
+								{ticket?.contact?.name || ticket?.contact?.number || "Contacto"}
 							</Typography>
-							{ticket.status === "closed" && (
+							{ticket?.status === "closed" && (
 								<Badge
 									className={classes.closedBadge}
 									badgeContent={"closed"}
 									color="primary"
 								/>
 							)}
-							{ticket.lastMessage && (
+							{ticket?.lastMessage && (
 								<Typography
 									className={classes.lastMessageTime}
 									component="span"
 									variant="body2"
 									color="textSecondary"
 								>
-									{isSameDay(parseISO(ticket.updatedAt), new Date()) ? (
-										<>{format(parseISO(ticket.updatedAt), "HH:mm")}</>
-									) : (
-										<>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
-									)}
+									{ticket.updatedAt && (() => {
+										try {
+											const d = parseISO(ticket.updatedAt);
+											if (isNaN(d.getTime())) return "";
+											return isSameDay(d, new Date()) ? format(d, "HH:mm") : format(d, "dd/MM/yyyy");
+										} catch (e) {
+											return "";
+										}
+									})()}
 								</Typography>
 							)}
 							{ticket.whatsappId && (

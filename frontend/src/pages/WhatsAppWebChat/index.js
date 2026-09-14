@@ -14,6 +14,7 @@ import { parseISO, format, isToday, isYesterday } from "date-fns";
 import clsx from "clsx";
 
 import Drawer from "@material-ui/core/Drawer";
+import Button from "@material-ui/core/Button";
 import Tooltip from "@material-ui/core/Tooltip";
 import MenuBookIcon from "@material-ui/icons/MenuBook";
 import CloseIcon from "@material-ui/icons/Close";
@@ -603,9 +604,21 @@ const WhatsAppWebChat = () => {
     });
 
     socket.on("ticket", (data) => {
-      if (data.action === "update" || data.action === "updateUnread") {
+      if (!data) return;
+
+      if (data.action === "updateUnread") {
+        const tId = data.ticketId || data.ticket?.id;
+        if (tId) {
+          setChats((prev) =>
+            prev.map((c) => (c && c.id === tId ? { ...c, unreadMessages: 0 } : c))
+          );
+        }
+        return;
+      }
+
+      if (data.action === "update" && data.ticket && data.ticket.id) {
         setChats((prev) => {
-          const index = prev.findIndex((t) => t.id === data.ticket.id);
+          const index = prev.findIndex((t) => t && t.id === data.ticket.id);
           if (index !== -1) {
             const updated = [...prev];
             updated[index] = { ...updated[index], ...data.ticket };
@@ -613,11 +626,17 @@ const WhatsAppWebChat = () => {
           }
           return [data.ticket, ...prev];
         });
+        return;
+      }
+
+      if (data.action === "delete" && data.ticketId) {
+        setChats((prev) => prev.filter((t) => t && t.id !== data.ticketId));
+        return;
       }
     });
 
     socket.on("contact", (data) => {
-      if (data.action === "update" && data.contact?.id) {
+      if (data?.action === "update" && data.contact?.id) {
         if (data.contact.profilePicUrl) {
           setProfilePics((prev) => ({ ...prev, [data.contact.id]: data.contact.profilePicUrl }));
         }
@@ -625,21 +644,24 @@ const WhatsAppWebChat = () => {
     });
 
     socket.on("appMessage", (data) => {
-      if (data.action === "create") {
+      if (data && data.action === "create" && data.message) {
         const msg = data.message;
+        const tId = msg.ticketId;
+        if (!tId) return;
+
         setChats((prev) => {
-          const tId = msg.ticketId;
-          const index = prev.findIndex((t) => t.id === tId);
+          const index = prev.findIndex((t) => t && t.id === tId);
           if (index !== -1) {
             const current = prev[index];
+            if (!current) return prev;
             const isCurrentActive = Number(ticketId) === tId;
             const updatedTicket = {
               ...current,
-              lastMessage: msg.body,
-              updatedAt: msg.createdAt,
-              unreadMessages: isCurrentActive ? 0 : current.unreadMessages + (msg.fromMe ? 0 : 1),
+              lastMessage: msg.body || (msg.mediaType ? `[${msg.mediaType}]` : ""),
+              updatedAt: msg.createdAt || new Date().toISOString(),
+              unreadMessages: isCurrentActive ? 0 : ((Number(current.unreadMessages) || 0) + (msg.fromMe ? 0 : 1)),
             };
-            const others = prev.filter((t) => t.id !== tId);
+            const others = prev.filter((t) => t && t.id !== tId);
             return [updatedTicket, ...others];
           }
           return prev;
@@ -729,8 +751,9 @@ const WhatsAppWebChat = () => {
               </div>
             ) : (
               chats.map((chat) => {
+                if (!chat) return null;
                 const isSelected = Number(ticketId) === chat.id;
-                const contactName = chat.contact?.name || chat.contact?.number || "Contacto";
+                const contactName = String(chat.contact?.name || chat.contact?.number || "Contacto");
                 const avatarPic = profilePics[chat.contact?.id] || chat.contact?.profilePicUrl;
 
                 return (
@@ -810,7 +833,7 @@ const WhatsAppWebChat = () => {
                       color: C.textPrimary,
                     }}
                   >
-                    {(selectedTicket.contact?.name || "C").charAt(0).toUpperCase()}
+                    {(String(selectedTicket.contact?.name || selectedTicket.contact?.number || "C")).charAt(0).toUpperCase()}
                   </Avatar>
                   <div className={classes.rightHeaderTexts}>
                     <Typography className={classes.rightHeaderName}>

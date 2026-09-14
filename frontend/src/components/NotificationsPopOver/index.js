@@ -110,29 +110,35 @@ const NotificationsPopOver = () => {
 		});
 
 		socket.on("appMessage", data => {
-			if (
-				data.action === "create" &&
-				!data.message.read &&
-				(data.ticket.userId === user?.id || !data.ticket.userId)
-			) {
-				setNotifications(prevState => {
-					const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
-					if (ticketIndex !== -1) {
-						prevState[ticketIndex] = data.ticket;
-						return [...prevState];
-					}
-					return [data.ticket, ...prevState];
-				});
+			try {
+				if (!data || !data.message || !data.ticket) return;
 
-				const shouldNotNotificate =
-					(data.message.ticketId === ticketIdRef.current &&
-						document.visibilityState === "visible") ||
-					(data.ticket.userId && data.ticket.userId !== user?.id) ||
-					data.ticket.isGroup;
+				if (
+					data.action === "create" &&
+					!data.message.read &&
+					(data.ticket.userId === user?.id || !data.ticket.userId)
+				) {
+					setNotifications(prevState => {
+						const ticketIndex = prevState.findIndex(t => t && t.id === data.ticket.id);
+						if (ticketIndex !== -1) {
+							prevState[ticketIndex] = data.ticket;
+							return [...prevState];
+						}
+						return [data.ticket, ...prevState];
+					});
 
-				if (shouldNotNotificate) return;
+					const shouldNotNotificate =
+						(data.message.ticketId === ticketIdRef.current &&
+							document.visibilityState === "visible") ||
+						(data.ticket.userId && data.ticket.userId !== user?.id) ||
+						data.ticket.isGroup;
 
-				handleNotifications(data);
+					if (shouldNotNotificate) return;
+
+					handleNotifications(data);
+				}
+			} catch (err) {
+				console.warn("[NotificationsPopOver] Socket error:", err);
 			}
 		});
 
@@ -142,38 +148,48 @@ const NotificationsPopOver = () => {
 	}, [user]);
 
 	const handleNotifications = data => {
-		const { message, contact, ticket } = data;
+		try {
+			const { message, contact, ticket } = data || {};
+			if (!ticket || !message) return;
 
-		const options = {
-			body: `${message.body} - ${format(new Date(), "HH:mm")}`,
-			icon: contact.profilePicUrl,
-			tag: ticket.id,
-			renotify: true,
-		};
+			if ("Notification" in window && Notification.permission === "granted") {
+				const options = {
+					body: `${message.body || ""} - ${format(new Date(), "HH:mm")}`,
+					icon: contact?.profilePicUrl,
+					tag: ticket.id,
+					renotify: true,
+				};
 
-		const notification = new Notification(
-			`${i18n.t("tickets.notification.message")} ${contact.name}`,
-			options
-		);
+				const contactDisplayName = contact?.name || contact?.number || "";
+				const notification = new Notification(
+					`${i18n.t("tickets.notification.message")} ${contactDisplayName}`,
+					options
+				);
 
-		notification.onclick = e => {
-			e.preventDefault();
-			window.focus();
-			historyRef.current.push(`/tickets/${ticket.id}`);
-		};
+				notification.onclick = e => {
+					e.preventDefault();
+					window.focus();
+					historyRef.current.push(`/chats/${ticket.id}`);
+				};
 
-		setDesktopNotifications(prevState => {
-			const notfiticationIndex = prevState.findIndex(
-				n => n.tag === notification.tag
-			);
-			if (notfiticationIndex !== -1) {
-				prevState[notfiticationIndex] = notification;
-				return [...prevState];
+				setDesktopNotifications(prevState => {
+					const notfiticationIndex = prevState.findIndex(
+						n => n.tag === notification.tag
+					);
+					if (notfiticationIndex !== -1) {
+						prevState[notfiticationIndex] = notification;
+						return [...prevState];
+					}
+					return [notification, ...prevState];
+				});
 			}
-			return [notification, ...prevState];
-		});
 
-		soundAlertRef.current();
+			if (typeof soundAlertRef.current === "function") {
+				soundAlertRef.current();
+			}
+		} catch (err) {
+			console.warn("[NotificationsPopOver] Error in handleNotifications:", err);
+		}
 	};
 
 	const handleClick = () => {

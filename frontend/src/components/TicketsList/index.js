@@ -184,12 +184,12 @@ const reducer = (state, action) => {
 	useEffect(() => {
 		const socket = openSocket();
 
-		const shouldUpdateTicket = ticket => !searchParam &&
+		const shouldUpdateTicket = ticket => Boolean(ticket) && !searchParam &&
 			(!ticket.userId || ticket.userId === user?.id || showAll) &&
-			(!ticket.queueId || selectedQueueIds.indexOf(ticket.queueId) > -1);
+			(!ticket.queueId || (Array.isArray(selectedQueueIds) && selectedQueueIds.indexOf(ticket.queueId) > -1));
 
 		const notBelongsToUserQueues = ticket =>
-			ticket.queueId && selectedQueueIds.indexOf(ticket.queueId) === -1;
+			Boolean(ticket && ticket.queueId) && Array.isArray(selectedQueueIds) && selectedQueueIds.indexOf(ticket.queueId) === -1;
 
 		socket.on("connect", () => {
 			if (status) {

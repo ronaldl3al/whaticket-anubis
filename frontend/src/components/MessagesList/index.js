@@ -391,13 +391,21 @@ const MessagesList = ({ ticketId, isGroup }) => {
     socket.on("connect", () => socket.emit("joinChatBox", ticketId));
 
     socket.on("appMessage", (data) => {
-      if (data.action === "create") {
-        dispatch({ type: "ADD_MESSAGE", payload: data.message });
-        scrollToBottom();
-      }
+      try {
+        if (!data || !data.message) return;
 
-      if (data.action === "update") {
-        dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+        if (data.action === "create") {
+          dispatch({ type: "ADD_MESSAGE", payload: data.message });
+          setTimeout(() => {
+            scrollToBottom();
+          }, 50);
+        }
+
+        if (data.action === "update") {
+          dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+        }
+      } catch (err) {
+        console.warn("[MessagesList] Socket appMessage error:", err);
       }
     });
 
@@ -411,8 +419,12 @@ const MessagesList = ({ ticketId, isGroup }) => {
   };
 
   const scrollToBottom = () => {
-    if (lastMessageRef.current) {
-      lastMessageRef.current.scrollIntoView({});
+    try {
+      if (lastMessageRef.current && typeof lastMessageRef.current.scrollIntoView === "function") {
+        lastMessageRef.current.scrollIntoView({ behavior: "smooth" });
+      }
+    } catch (e) {
+      // Ignore scroll failures
     }
   };
 
@@ -607,11 +619,11 @@ const MessagesList = ({ ticketId, isGroup }) => {
           })}
         ></span>
         <div className={classes.quotedMsg}>
-          {!message.quotedMsg?.fromMe && (
-            <span className={classes.messageContactName}>
-              {message.quotedMsg?.contact?.name}
-            </span>
-          )}
+            {!message.quotedMsg?.fromMe && (
+              <span className={classes.messageContactName}>
+                {message.quotedMsg?.contact?.name || message.quotedMsg?.contact?.number || "Contacto"}
+              </span>
+            )}
           {message.quotedMsg?.mediaType === "image" ||
           (message.quotedMsg?.mediaUrl &&
             /\.(jpe?g|png|gif|webp)$/i.test(message.quotedMsg.mediaUrl)) ? (

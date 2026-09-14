@@ -3,10 +3,13 @@ import ReactDOM from "react-dom";
 import CssBaseline from "@material-ui/core/CssBaseline";
 
 import App from "./App";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 ReactDOM.render(
 	<CssBaseline>
-		<App />
+		<ErrorBoundary>
+			<App />
+		</ErrorBoundary>
 	</CssBaseline>,
 	document.getElementById("root")
 );
