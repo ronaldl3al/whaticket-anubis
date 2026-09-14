@@ -8,6 +8,7 @@ import {
 } from "./types";
 import { WhatsappWebJsProvider } from "./Implementations/wwebjs";
 import { WhaileysProvider } from "./Implementations/whaileys";
+import { EvolutionApiProvider } from "./Implementations/EvolutionApiProvider";
 
 export interface WhatsappProvider {
   init(whatsapp: Whatsapp): Promise<void>;
@@ -42,13 +43,14 @@ export interface WhatsappProvider {
   ): Promise<ProviderMessage[]>;
 }
 
-const provider = process.env.WHATSAPP_PROVIDER || "whaileys";
+const provider = process.env.WHATSAPP_PROVIDER || "evolution";
 
 const providersMap: Record<string, WhatsappProvider> = {
   wwebjs: WhatsappWebJsProvider,
-  whaileys: WhaileysProvider
+  whaileys: WhaileysProvider,
+  evolution: EvolutionApiProvider
 };
 
-const whatsappProvider = providersMap[provider];
+const whatsappProvider = providersMap[provider] || EvolutionApiProvider;
 
-export { whatsappProvider };
+export { whatsappProvider, EvolutionApiProvider };
