@@ -8,7 +8,6 @@ import SearchIcon from "@material-ui/icons/Search";
 import WhatsAppIcon from "@material-ui/icons/WhatsApp";
 import LockIcon from "@material-ui/icons/Lock";
 import ArrowBackIcon from "@material-ui/icons/ArrowBack";
-import Chip from "@material-ui/core/Chip";
 import IconButton from "@material-ui/core/IconButton";
 import CircularProgress from "@material-ui/core/CircularProgress";
 import { parseISO, format, isToday, isYesterday } from "date-fns";
@@ -21,13 +20,27 @@ import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMess
 import MessagesList from "../../components/MessagesList";
 import MessageInput from "../../components/MessageInput";
 
+// Anubis Store Dark Palette
+const C = {
+  deepNavy: "#10232A",
+  panelBg: "#1a2e36",
+  slateGray: "#3D4D55",
+  warmGray: "#A79E9C",
+  warmBeige: "#D3C3B9",
+  goldAccent: "#B58863",
+  pureBlack: "#161616",
+  divider: "rgba(61,77,85,0.35)",
+};
+
 const useStyles = makeStyles((theme) => ({
   mainContainer: {
     display: "flex",
     height: "calc(100vh - 48px)",
     overflow: "hidden",
-    backgroundColor: "#f0f2f5",
+    backgroundColor: C.deepNavy,
   },
+
+  /* ─── LEFT PANEL ─── */
   leftPanel: {
     width: "380px",
     minWidth: "320px",
@@ -35,8 +48,8 @@ const useStyles = makeStyles((theme) => ({
     height: "100%",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "#ffffff",
-    borderRight: "1px solid #e9edef",
+    backgroundColor: C.deepNavy,
+    borderRight: `1px solid ${C.divider}`,
     zIndex: 2,
     [theme.breakpoints.down("sm")]: {
       width: "100%",
@@ -48,60 +61,72 @@ const useStyles = makeStyles((theme) => ({
       display: "none",
     },
   },
-  rightPanel: {
-    flex: 1,
-    height: "100%",
-    display: "flex",
-    flexDirection: "column",
-    backgroundColor: "#efeae2",
-    position: "relative",
-  },
-  rightPanelHiddenMobile: {
-    [theme.breakpoints.down("sm")]: {
-      display: "none",
-    },
-  },
+
   headerLeft: {
     height: "60px",
-    backgroundColor: "#f0f2f5",
+    backgroundColor: C.pureBlack,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "0 16px",
-    borderBottom: "1px solid #e9edef",
+    borderBottom: `1px solid ${C.divider}`,
   },
   headerLeftTitle: {
     fontWeight: 600,
     fontSize: "1.1rem",
-    color: "#111b21",
+    color: C.warmBeige,
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "10px",
+    letterSpacing: "0.3px",
   },
+  headerBrand: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    backgroundColor: C.goldAccent,
+    color: C.pureBlack,
+    fontWeight: 700,
+    fontSize: "0.72rem",
+    padding: "3px 10px",
+    borderRadius: "12px",
+    letterSpacing: "0.5px",
+    textTransform: "uppercase",
+  },
+
   searchContainer: {
-    padding: "8px 12px",
-    backgroundColor: "#ffffff",
-    borderBottom: "1px solid #f0f2f5",
+    padding: "10px 12px",
+    backgroundColor: C.deepNavy,
+    borderBottom: `1px solid ${C.divider}`,
   },
   searchWrapper: {
     display: "flex",
     alignItems: "center",
-    backgroundColor: "#f0f2f5",
+    backgroundColor: C.panelBg,
     borderRadius: "8px",
-    padding: "4px 10px",
+    padding: "6px 12px",
+    transition: "background-color 0.2s ease",
+    "&:focus-within": {
+      backgroundColor: C.slateGray,
+    },
   },
   searchInput: {
     marginLeft: "8px",
     flex: 1,
     fontSize: "0.88rem",
-    color: "#111b21",
+    color: C.warmBeige,
+    "&::placeholder": {
+      color: C.warmGray,
+      opacity: 1,
+    },
   },
+
   filterPills: {
     display: "flex",
-    gap: "6px",
-    padding: "6px 12px 10px 12px",
-    backgroundColor: "#ffffff",
-    borderBottom: "1px solid #e9edef",
+    gap: "8px",
+    padding: "8px 12px 12px 12px",
+    backgroundColor: C.deepNavy,
+    borderBottom: `1px solid ${C.divider}`,
     overflowX: "auto",
   },
   pill: {
@@ -109,48 +134,67 @@ const useStyles = makeStyles((theme) => ({
     fontWeight: 500,
     cursor: "pointer",
     borderRadius: "16px",
-    padding: "4px 10px",
-    backgroundColor: "#f0f2f5",
-    color: "#54656f",
+    padding: "5px 14px",
+    backgroundColor: C.panelBg,
+    color: C.warmGray,
     border: "none",
     outline: "none",
+    transition: "all 0.2s ease",
     "&:hover": {
-      backgroundColor: "#e9edef",
+      backgroundColor: C.slateGray,
+      color: C.warmBeige,
     },
   },
   pillActive: {
-    backgroundColor: "#d9fdd3 !important",
-    color: "#008069 !important",
-    fontWeight: 600,
+    backgroundColor: `${C.goldAccent} !important`,
+    color: `${C.pureBlack} !important`,
+    fontWeight: 700,
   },
+
   chatList: {
     flex: 1,
     overflowY: "auto",
-    backgroundColor: "#ffffff",
+    backgroundColor: C.deepNavy,
+    "&::-webkit-scrollbar": {
+      width: "5px",
+    },
+    "&::-webkit-scrollbar-track": {
+      backgroundColor: C.deepNavy,
+    },
+    "&::-webkit-scrollbar-thumb": {
+      backgroundColor: C.slateGray,
+      borderRadius: "3px",
+    },
   },
+
   chatItem: {
     display: "flex",
     alignItems: "center",
-    padding: "10px 14px",
+    padding: "12px 14px",
     cursor: "pointer",
-    borderBottom: "1px solid #f5f6f6",
+    borderBottom: `1px solid ${C.divider}`,
     transition: "background-color 0.15s ease",
     "&:hover": {
-      backgroundColor: "#f5f6f6",
+      backgroundColor: C.panelBg,
     },
   },
   chatItemActive: {
-    backgroundColor: "#f0f2f5 !important",
+    backgroundColor: `${C.slateGray} !important`,
+    borderLeft: `3px solid ${C.goldAccent}`,
+    paddingLeft: "11px",
   },
+
   chatAvatar: {
     width: "48px",
     height: "48px",
-    backgroundColor: "#00a884",
-    color: "#ffffff",
+    backgroundColor: C.slateGray,
+    color: C.warmBeige,
     fontWeight: 600,
     fontSize: "1.1rem",
     marginRight: "12px",
+    border: `2px solid ${C.divider}`,
   },
+
   chatDetails: {
     flex: 1,
     minWidth: 0,
@@ -166,14 +210,14 @@ const useStyles = makeStyles((theme) => ({
   chatName: {
     fontWeight: 600,
     fontSize: "0.95rem",
-    color: "#111b21",
+    color: C.warmBeige,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
   chatTime: {
-    fontSize: "0.74rem",
-    color: "#667781",
+    fontSize: "0.72rem",
+    color: C.warmGray,
     marginLeft: "6px",
     flexShrink: 0,
   },
@@ -184,7 +228,7 @@ const useStyles = makeStyles((theme) => ({
   },
   chatMessageSnippet: {
     fontSize: "0.84rem",
-    color: "#667781",
+    color: C.warmGray,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -192,28 +236,45 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: "3px",
   },
+
   unreadBadge: {
-    backgroundColor: "#25d366",
-    color: "#ffffff",
+    backgroundColor: C.goldAccent,
+    color: C.pureBlack,
     borderRadius: "10px",
-    fontSize: "0.75rem",
+    fontSize: "0.73rem",
     fontWeight: 700,
-    minWidth: "18px",
-    height: "18px",
+    minWidth: "20px",
+    height: "20px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "0 5px",
+    padding: "0 6px",
     marginLeft: "6px",
   },
+
+  /* ─── RIGHT PANEL ─── */
+  rightPanel: {
+    flex: 1,
+    height: "100%",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: C.deepNavy,
+    position: "relative",
+  },
+  rightPanelHiddenMobile: {
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+
   rightHeader: {
     height: "60px",
-    backgroundColor: "#f0f2f5",
+    backgroundColor: C.pureBlack,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "0 16px",
-    borderBottom: "1px solid #e9edef",
+    borderBottom: `1px solid ${C.divider}`,
     zIndex: 1,
   },
   rightHeaderInfo: {
@@ -229,20 +290,26 @@ const useStyles = makeStyles((theme) => ({
   rightHeaderName: {
     fontWeight: 600,
     fontSize: "1rem",
-    color: "#111b21",
+    color: C.warmBeige,
     lineHeight: "1.2",
   },
   rightHeaderStatus: {
     fontSize: "0.78rem",
-    color: "#008069",
+    color: C.goldAccent,
     fontWeight: 500,
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
   },
+
   messagesArea: {
     flex: 1,
     overflowY: "hidden",
     position: "relative",
-    backgroundColor: "#efeae2",
+    backgroundColor: C.deepNavy,
   },
+
+  /* ─── WELCOME SCREEN ─── */
   welcomeScreen: {
     flex: 1,
     height: "100%",
@@ -250,41 +317,53 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f0f2f5",
-    borderBottom: "6px solid #25d366",
+    backgroundColor: C.deepNavy,
+    borderBottom: `4px solid ${C.goldAccent}`,
     padding: "20px",
     textAlign: "center",
+  },
+  welcomeIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: "50%",
+    background: `linear-gradient(135deg, ${C.slateGray}, ${C.panelBg})`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    boxShadow: `0 4px 20px rgba(0,0,0,0.3)`,
   },
   welcomeTitle: {
     fontSize: "1.8rem",
     fontWeight: 300,
-    color: "#41525d",
-    marginTop: "24px",
+    color: C.warmBeige,
     marginBottom: "10px",
+    letterSpacing: "0.5px",
   },
   welcomeSubtitle: {
     fontSize: "0.92rem",
-    color: "#667781",
+    color: C.warmGray,
     maxWidth: "480px",
-    lineHeight: "1.5",
+    lineHeight: "1.6",
   },
   welcomeFooter: {
     display: "flex",
     alignItems: "center",
     gap: "6px",
     marginTop: "40px",
-    color: "#8696a0",
+    color: C.warmGray,
     fontSize: "0.82rem",
   },
+
   loadingContainer: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "30px",
+    padding: "40px",
   },
   emptyListMessage: {
     textAlign: "center",
-    color: "#667781",
+    color: C.warmGray,
     padding: "40px 20px",
     fontSize: "0.9rem",
   },
@@ -442,26 +521,21 @@ const WhatsAppWebChat = () => {
           [classes.leftPanelHiddenMobile]: Boolean(ticketId),
         })}
       >
+        {/* Header */}
         <div className={classes.headerLeft}>
           <Typography className={classes.headerLeftTitle}>
-            <WhatsAppIcon style={{ color: "#25d366", fontSize: 26 }} />
+            <WhatsAppIcon style={{ color: C.goldAccent, fontSize: 26 }} />
             Chats
           </Typography>
-          <Chip
-            size="small"
-            label="WhatsApp Web"
-            style={{
-              backgroundColor: "#d9fdd3",
-              color: "#008069",
-              fontWeight: 600,
-              fontSize: "0.74rem",
-            }}
-          />
+          <span className={classes.headerBrand}>
+            Anubis Store
+          </span>
         </div>
 
+        {/* Search */}
         <div className={classes.searchContainer}>
           <div className={classes.searchWrapper}>
-            <SearchIcon style={{ color: "#54656f", fontSize: 20 }} />
+            <SearchIcon style={{ color: C.warmGray, fontSize: 20 }} />
             <InputBase
               className={classes.searchInput}
               placeholder="Buscar o empezar un nuevo chat"
@@ -471,40 +545,31 @@ const WhatsAppWebChat = () => {
           </div>
         </div>
 
+        {/* Filter Pills */}
         <div className={classes.filterPills}>
-          <button
-            type="button"
-            className={clsx(classes.pill, {
-              [classes.pillActive]: filter === "all",
-            })}
-            onClick={() => setFilter("all")}
-          >
-            Todos
-          </button>
-          <button
-            type="button"
-            className={clsx(classes.pill, {
-              [classes.pillActive]: filter === "unread",
-            })}
-            onClick={() => setFilter("unread")}
-          >
-            No leídos
-          </button>
-          <button
-            type="button"
-            className={clsx(classes.pill, {
-              [classes.pillActive]: filter === "groups",
-            })}
-            onClick={() => setFilter("groups")}
-          >
-            Grupos
-          </button>
+          {[
+            { key: "all", label: "Todos" },
+            { key: "unread", label: "No leídos" },
+            { key: "groups", label: "Grupos" },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              className={clsx(classes.pill, {
+                [classes.pillActive]: filter === key,
+              })}
+              onClick={() => setFilter(key)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
+        {/* Chat List */}
         <div className={classes.chatList}>
           {loading ? (
             <div className={classes.loadingContainer}>
-              <CircularProgress size={32} style={{ color: "#25d366" }} />
+              <CircularProgress size={32} style={{ color: C.goldAccent }} />
             </div>
           ) : chats.length === 0 ? (
             <div className={classes.emptyListMessage}>
@@ -534,7 +599,10 @@ const WhatsAppWebChat = () => {
                       <Typography className={classes.chatName}>
                         {contactName}
                       </Typography>
-                      <Typography className={classes.chatTime}>
+                      <Typography
+                        className={classes.chatTime}
+                        style={chat.unreadMessages > 0 ? { color: C.goldAccent } : {}}
+                      >
                         {formatMessageTime(chat.updatedAt)}
                       </Typography>
                     </div>
@@ -556,6 +624,7 @@ const WhatsAppWebChat = () => {
         </div>
       </div>
 
+      {/* ─── RIGHT PANEL ─── */}
       <div
         className={clsx(classes.rightPanel, {
           [classes.rightPanelHiddenMobile]: !Boolean(ticketId),
@@ -569,11 +638,17 @@ const WhatsAppWebChat = () => {
                   style={{ marginRight: 4, padding: 6 }}
                   onClick={handleBackToChatList}
                 >
-                  <ArrowBackIcon style={{ color: "#54656f" }} />
+                  <ArrowBackIcon style={{ color: C.warmGray }} />
                 </IconButton>
                 <Avatar
                   src={selectedTicket.contact?.profilePicUrl}
-                  style={{ width: 40, height: 40, backgroundColor: "#00a884" }}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    backgroundColor: C.slateGray,
+                    color: C.warmBeige,
+                    border: `2px solid ${C.divider}`,
+                  }}
                 >
                   {(selectedTicket.contact?.name || "C").charAt(0).toUpperCase()}
                 </Avatar>
@@ -582,7 +657,16 @@ const WhatsAppWebChat = () => {
                     {selectedTicket.contact?.name || selectedTicket.contact?.number}
                   </Typography>
                   <Typography className={classes.rightHeaderStatus}>
-                    {selectedTicket.contact?.number ? `+${selectedTicket.contact.number} • WhatsApp Conectado` : "En línea"}
+                    <span style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      backgroundColor: C.goldAccent,
+                      display: "inline-block",
+                    }} />
+                    {selectedTicket.contact?.number
+                      ? `+${selectedTicket.contact.number} • Conectado`
+                      : "En línea"}
                   </Typography>
                 </div>
               </div>
@@ -599,26 +683,15 @@ const WhatsAppWebChat = () => {
           </ReplyMessageProvider>
         ) : (
           <div className={classes.welcomeScreen}>
-            <div
-              style={{
-                width: 100,
-                height: 100,
-                borderRadius: "50%",
-                backgroundColor: "#d9fdd3",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 16,
-              }}
-            >
-              <WhatsAppIcon style={{ fontSize: 60, color: "#25d366" }} />
+            <div className={classes.welcomeIconContainer}>
+              <WhatsAppIcon style={{ fontSize: 56, color: C.goldAccent }} />
             </div>
             <Typography className={classes.welcomeTitle}>
-              WhatsApp Web • Anubis Store
+              Anubis Store
             </Typography>
             <Typography className={classes.welcomeSubtitle}>
               Envía y recibe mensajes, fotos, notas de voz y documentos en tiempo real.
-              Al abrir cualquier mensaje, las notificaciones en tu teléfono WhatsApp nativo se sincronizan y limpian automáticamente.
+              Las notificaciones se sincronizan automáticamente con tu WhatsApp.
             </Typography>
             <div className={classes.welcomeFooter}>
               <LockIcon style={{ fontSize: 16 }} />

@@ -12,16 +12,19 @@ const App = () => {
     {
       scrollbarStyles: {
         "&::-webkit-scrollbar": {
-          width: "8px",
-          height: "8px",
+          width: "6px",
+          height: "6px",
+        },
+        "&::-webkit-scrollbar-track": {
+          backgroundColor: "#10232A",
         },
         "&::-webkit-scrollbar-thumb": {
-          boxShadow: "inset 0 0 6px rgba(0, 0, 0, 0.3)",
-          backgroundColor: "#e8e8e8",
+          backgroundColor: "#3D4D55",
+          borderRadius: "3px",
         },
       },
       palette: {
-        primary: { main: "#2576d2" },
+        primary: { main: "#B58863" },
       },
     },
     locale

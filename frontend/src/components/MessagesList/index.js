@@ -42,7 +42,7 @@ const useStyles = makeStyles((theme) => ({
   },
 
   messagesList: {
-    backgroundImage: `url(${whatsBackground})`,
+    backgroundColor: "#10232A",
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
@@ -55,7 +55,7 @@ const useStyles = makeStyles((theme) => ({
   },
 
   circleLoading: {
-    color: green[500],
+    color: "#B58863",
     position: "absolute",
     opacity: "70%",
     top: 0,
@@ -79,8 +79,8 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#ffffff",
-    color: "#303030",
+    backgroundColor: "#3D4D55",
+    color: "#D3C3B9",
     alignSelf: "flex-start",
     borderTopLeftRadius: 0,
     borderTopRightRadius: 8,
@@ -90,13 +90,13 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
   },
 
   quotedContainerLeft: {
     margin: "-3px -80px 6px -6px",
     overflow: "hidden",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#2a3a42",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -114,7 +114,7 @@ const useStyles = makeStyles((theme) => ({
   quotedSideColorLeft: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#6bcbef",
+    backgroundColor: "#B58863",
   },
 
   messageRight: {
@@ -133,8 +133,8 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#dcf8c6",
-    color: "#303030",
+    backgroundColor: "#1a3a4a",
+    color: "#D3C3B9",
     alignSelf: "flex-end",
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
@@ -144,13 +144,13 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
   },
 
   quotedContainerRight: {
     margin: "-3px -80px 6px -6px",
     overflowY: "hidden",
-    backgroundColor: "#cfe9ba",
+    backgroundColor: "#15303e",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -166,7 +166,7 @@ const useStyles = makeStyles((theme) => ({
   quotedSideColorRight: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#35cd96",
+    backgroundColor: "#B58863",
   },
 
   messageActionsButton: {
@@ -181,7 +181,7 @@ const useStyles = makeStyles((theme) => ({
 
   messageContactName: {
     display: "flex",
-    color: "#6bcbef",
+    color: "#B58863",
     fontWeight: 500,
   },
 
@@ -192,7 +192,7 @@ const useStyles = makeStyles((theme) => ({
 
   textContentItemDeleted: {
     fontStyle: "italic",
-    color: "rgba(0, 0, 0, 0.36)",
+    color: "rgba(211, 195, 185, 0.4)",
     overflowWrap: "break-word",
     padding: "3px 80px 6px 6px",
   },
@@ -212,7 +212,7 @@ const useStyles = makeStyles((theme) => ({
     position: "absolute",
     bottom: 0,
     right: 5,
-    color: "#999",
+    color: "#A79E9C",
   },
 
   dailyTimestamp: {
@@ -220,14 +220,14 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "center",
     alignSelf: "center",
     width: "110px",
-    backgroundColor: "#e1f3fb",
+    backgroundColor: "#1a2e36",
     margin: "10px",
     borderRadius: "10px",
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
   },
 
   dailyTimestampText: {
-    color: "#808888",
+    color: "#D3C3B9",
     padding: 8,
     alignSelf: "center",
     marginLeft: "0px",
@@ -246,7 +246,7 @@ const useStyles = makeStyles((theme) => ({
   },
 
   ackDoneAllIcon: {
-    color: green[500],
+    color: "#B58863",
     fontSize: 18,
     verticalAlign: "middle",
     marginLeft: 4,

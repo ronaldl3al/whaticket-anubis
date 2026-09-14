@@ -80,7 +80,7 @@ const MainListItems = (props) => {
       <ListItemLink
         to="/chats"
         primary="Chats"
-        icon={<WhatsAppIcon style={{ color: "#25D366" }} />}
+        icon={<WhatsAppIcon style={{ color: "#B58863" }} />}
       />
       <ListItemLink
         to="/connections"
