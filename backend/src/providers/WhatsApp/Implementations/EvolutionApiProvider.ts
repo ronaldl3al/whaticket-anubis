@@ -26,10 +26,6 @@ const getEvolutionConfig = () => {
   return { apiUrl, apiKey, backendUrl };
 };
 
-const getInstanceName = (whatsapp: Whatsapp | { id: number; name?: string }): string => {
-  return `whatsapp_${whatsapp.id}`;
-};
-
 const evolutionFetch = async (
   endpoint: string,
   options: {
@@ -67,16 +63,47 @@ const evolutionFetch = async (
   }
 };
 
+const resolveInstanceName = async (whatsapp?: Whatsapp | { id: number; name?: string }): Promise<string> => {
+  if (process.env.EVOLUTION_INSTANCE_NAME) {
+    return process.env.EVOLUTION_INSTANCE_NAME;
+  }
+
+  try {
+    const res = await evolutionFetch("/instance/fetchInstances");
+    const list = Array.isArray(res.data) ? res.data : [];
+
+    if (list.length > 0) {
+      if (whatsapp?.name) {
+        const match = list.find((inst: any) =>
+          inst.name?.toLowerCase().trim() === whatsapp.name?.toLowerCase().trim() ||
+          inst.name?.toLowerCase().includes(whatsapp.name?.toLowerCase().trim()) ||
+          whatsapp.name?.toLowerCase().includes(inst.name?.toLowerCase().trim())
+        );
+        if (match) return match.name;
+      }
+      if (list.length === 1 && list[0].name) {
+        return list[0].name;
+      }
+      const openMatch = list.find((inst: any) => inst.connectionStatus === "open");
+      if (openMatch && openMatch.name) {
+        return openMatch.name;
+      }
+    }
+  } catch {}
+
+  return whatsapp?.name ? whatsapp.name : `whatsapp_${whatsapp?.id || 1}`;
+};
+
 export const EvolutionApiProvider: WhatsappProvider = {
   init: async (whatsapp: Whatsapp): Promise<void> => {
     const { backendUrl, apiKey } = getEvolutionConfig();
-    const instanceName = getInstanceName(whatsapp);
+    const instanceName = await resolveInstanceName(whatsapp);
     const io = getIO();
 
     logger.info(`[EVOLUTION] Initializing instance ${instanceName} for session ${whatsapp.id}`);
 
     // 1. Check if instance already exists
-    const checkRes = await evolutionFetch(`/instance/connectionState/${instanceName}`);
+    const checkRes = await evolutionFetch(`/instance/connectionState/${encodeURIComponent(instanceName)}`);
 
     if (checkRes.status === 404 || !checkRes.ok) {
       logger.info(`[EVOLUTION] Creating new instance ${instanceName}`);
@@ -94,31 +121,37 @@ export const EvolutionApiProvider: WhatsappProvider = {
     // 2. Set Webhook URL to point to Whaticket backend
     const webhookUrl = `${backendUrl}/evolution-webhook/${whatsapp.id}`;
     logger.info(`[EVOLUTION] Configuring webhook for ${instanceName} to ${webhookUrl}`);
-    await evolutionFetch(`/webhook/set/${instanceName}`, {
+    await evolutionFetch(`/webhook/set/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       body: {
-        enabled: true,
-        url: webhookUrl,
-        webhookByEvents: false,
-        events: [
-          "MESSAGES_UPSERT",
-          "MESSAGES_UPDATE",
-          "MESSAGES_DELETE",
-          "CHATS_UPSERT",
-          "CHATS_UPDATE",
-          "CHATS_SET",
-          "CONTACTS_UPSERT",
-          "CONTACTS_UPDATE",
-          "CONTACTS_SET",
-          "CONNECTION_UPDATE",
-          "QRCODE_UPDATED"
-        ]
+        webhook: {
+          enabled: true,
+          url: webhookUrl,
+          byEvents: false,
+          events: [
+            "MESSAGES_UPSERT",
+            "MESSAGES_UPDATE",
+            "MESSAGES_DELETE",
+            "CHATS_UPSERT",
+            "CHATS_UPDATE",
+            "CHATS_SET",
+            "CONTACTS_UPSERT",
+            "CONTACTS_UPDATE",
+            "CONTACTS_SET",
+            "CONNECTION_UPDATE",
+            "QRCODE_UPDATED"
+          ]
+        }
       }
     });
 
-    // 3. Request connection / QR code
-    const connStateRes = await evolutionFetch(`/instance/connectionState/${instanceName}`);
-    const state = connStateRes.data?.instance?.state || connStateRes.data?.state || "";
+    // 3. Check connection status
+    const connStateRes = await evolutionFetch(`/instance/connectionState/${encodeURIComponent(instanceName)}`);
+    const state =
+      connStateRes.data?.instance?.state ||
+      connStateRes.data?.state ||
+      connStateRes.data?.instance?.connectionStatus ||
+      "";
 
     if (state === "open") {
       await whatsapp.update({
@@ -130,8 +163,12 @@ export const EvolutionApiProvider: WhatsappProvider = {
       io.emit("whatsapp", { action: "update", whatsapp });
       logger.info(`[EVOLUTION] Instance ${instanceName} is already CONNECTED`);
     } else {
-      const connectRes = await evolutionFetch(`/instance/connect/${instanceName}`);
-      const qrData = connectRes.data?.base64 || connectRes.data?.code || connectRes.data?.qrcode?.base64 || "";
+      const connectRes = await evolutionFetch(`/instance/connect/${encodeURIComponent(instanceName)}`);
+      const qrData =
+        connectRes.data?.base64 ||
+        connectRes.data?.code ||
+        connectRes.data?.qrcode?.base64 ||
+        "";
 
       if (qrData) {
         await whatsapp.update({
@@ -150,10 +187,10 @@ export const EvolutionApiProvider: WhatsappProvider = {
   },
 
   logout: async (sessionId: number): Promise<void> => {
-    const instanceName = getInstanceName({ id: sessionId });
+    const instanceName = await resolveInstanceName({ id: sessionId });
     logger.info(`[EVOLUTION] Logging out instance ${instanceName}`);
 
-    await evolutionFetch(`/instance/logout/${instanceName}`, { method: "DELETE" });
+    await evolutionFetch(`/instance/logout/${encodeURIComponent(instanceName)}`, { method: "DELETE" });
 
     const whatsapp = await Whatsapp.findByPk(sessionId);
     if (whatsapp) {
@@ -173,7 +210,7 @@ export const EvolutionApiProvider: WhatsappProvider = {
     body: string,
     options?: SendMessageOptions
   ): Promise<ProviderMessage> => {
-    const instanceName = getInstanceName({ id: sessionId });
+    const instanceName = await resolveInstanceName({ id: sessionId });
 
     let destination = to;
     if (!to.includes("@g.us")) {
@@ -198,7 +235,7 @@ export const EvolutionApiProvider: WhatsappProvider = {
       };
     }
 
-    const res = await evolutionFetch(`/message/sendText/${instanceName}`, {
+    const res = await evolutionFetch(`/message/sendText/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       body: payload
     });
@@ -227,7 +264,7 @@ export const EvolutionApiProvider: WhatsappProvider = {
     media: ProviderMediaInput,
     options?: SendMediaOptions
   ): Promise<ProviderMessage> => {
-    const instanceName = getInstanceName({ id: sessionId });
+    const instanceName = await resolveInstanceName({ id: sessionId });
 
     let destination = to;
     if (!to.includes("@g.us")) {
@@ -256,11 +293,11 @@ export const EvolutionApiProvider: WhatsappProvider = {
       }
     }
 
-    let endpoint = `/message/sendMedia/${instanceName}`;
+    let endpoint = `/message/sendMedia/${encodeURIComponent(instanceName)}`;
     let payload: any = {};
 
     if (isAudio) {
-      endpoint = `/message/sendWhatsAppAudio/${instanceName}`;
+      endpoint = `/message/sendWhatsAppAudio/${encodeURIComponent(instanceName)}`;
       payload = {
         number: destination,
         audio: mediaBase64
@@ -309,9 +346,9 @@ export const EvolutionApiProvider: WhatsappProvider = {
     messageId: string,
     fromMe: boolean
   ): Promise<void> => {
-    const instanceName = getInstanceName({ id: sessionId });
+    const instanceName = await resolveInstanceName({ id: sessionId });
 
-    await evolutionFetch(`/message/deleteMessage/${instanceName}`, {
+    await evolutionFetch(`/message/deleteMessage/${encodeURIComponent(instanceName)}`, {
       method: "DELETE",
       body: {
         id: messageId,
@@ -322,10 +359,10 @@ export const EvolutionApiProvider: WhatsappProvider = {
   },
 
   checkNumber: async (sessionId: number, number: string): Promise<string> => {
-    const instanceName = getInstanceName({ id: sessionId });
+    const instanceName = await resolveInstanceName({ id: sessionId });
     const cleanNumber = normalizePhoneNumber(number) || cleanDigits(number);
 
-    const res = await evolutionFetch(`/chat/whatsappNumbers/${instanceName}`, {
+    const res = await evolutionFetch(`/chat/whatsappNumbers/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       body: {
         numbers: [cleanNumber]
@@ -343,10 +380,10 @@ export const EvolutionApiProvider: WhatsappProvider = {
   },
 
   getProfilePicUrl: async (sessionId: number, number: string): Promise<string> => {
-    const instanceName = getInstanceName({ id: sessionId });
+    const instanceName = await resolveInstanceName({ id: sessionId });
     const cleanNumber = normalizePhoneNumber(number) || cleanDigits(number);
 
-    const res = await evolutionFetch(`/chat/fetchProfilePictureUrl/${instanceName}`, {
+    const res = await evolutionFetch(`/chat/fetchProfilePictureUrl/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       body: { number: cleanNumber }
     });
@@ -355,70 +392,70 @@ export const EvolutionApiProvider: WhatsappProvider = {
   },
 
   getContacts: async (sessionId: number): Promise<ProviderContact[]> => {
-    const instanceName = getInstanceName({ id: sessionId });
+    const instanceName = await resolveInstanceName({ id: sessionId });
     const contactMap = new Map<string, ProviderContact>();
 
-    logger.info(`[EVOLUTION] Querying chats and contacts for instance ${instanceName}`);
+    logger.info(`[EVOLUTION] Querying contacts and chats for instance ${instanceName}`);
 
-    // 1. Fetch Chats (where chat names like cliente0000 exist)
-    let chatsRes = await evolutionFetch(`/chat/findChats/${instanceName}`);
-    if (!chatsRes.ok) {
-      chatsRes = await evolutionFetch(`/chat/findChats/${instanceName}`, { method: "POST", body: {} });
-    }
-    const chatsList = Array.isArray(chatsRes.data)
-      ? chatsRes.data
-      : (chatsRes.data?.chats || chatsRes.data?.data || []);
-
-    if (Array.isArray(chatsList)) {
-      for (const chat of chatsList) {
-        if (!chat || !chat.id || chat.id.includes("@g.us") || chat.id.includes("@broadcast") || chat.id.endsWith("newsletter")) {
-          continue;
-        }
-
-        const rawJid = chat.id;
-        const userPart = rawJid.split("@")[0];
-
-        if (isLid(rawJid) || isLid(userPart)) continue;
-        if (!isRealPhoneNumber(userPart)) continue;
-
-        const cleanPhone = normalizePhoneNumber(userPart);
-        const candidateName = chat.name || chat.displayName || chat.subject || "";
-        const isRegistered = isValidContactName(candidateName, cleanPhone);
-        const registeredName = isRegistered ? candidateName.trim() : "";
-
-        contactMap.set(cleanPhone, {
-          id: `${cleanPhone}@s.whatsapp.net`,
-          number: cleanPhone,
-          name: registeredName || cleanPhone,
-          pushname: chat.pushName || "",
-          isGroup: false
-        });
-      }
-    }
-
-    // 2. Fetch Contacts
-    let contactsRes = await evolutionFetch(`/contact/findContact/${instanceName}`);
-    if (!contactsRes.ok) {
-      contactsRes = await evolutionFetch(`/contact/findContact/${instanceName}`, { method: "POST", body: {} });
-    }
+    // 1. Fetch contacts from /chat/findContacts
+    const contactsRes = await evolutionFetch(`/chat/findContacts/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      body: {}
+    });
     const contactsList = Array.isArray(contactsRes.data)
       ? contactsRes.data
       : (contactsRes.data?.contacts || contactsRes.data?.data || []);
 
     if (Array.isArray(contactsList)) {
       for (const c of contactsList) {
-        if (!c || !c.id || c.id.includes("@g.us") || c.id.includes("@broadcast")) continue;
+        const rawJid = c.remoteJid || c.id || "";
+        if (!rawJid || rawJid.includes("@g.us") || rawJid.includes("@broadcast") || rawJid.endsWith("newsletter")) {
+          continue;
+        }
 
-        const rawJid = c.id;
         const userPart = rawJid.split("@")[0];
-
         if (isLid(rawJid) || isLid(userPart)) continue;
         if (!isRealPhoneNumber(userPart)) continue;
 
         const cleanPhone = normalizePhoneNumber(userPart);
-        const candidateName = c.name || c.displayName || c.pushName || "";
-        const isRegistered = isValidContactName(candidateName, cleanPhone);
-        const registeredName = isRegistered ? candidateName.trim() : "";
+        const rawName = c.pushName || c.name || c.displayName || "";
+        const isRegistered = isValidContactName(rawName, cleanPhone);
+        const registeredName = isRegistered ? rawName.trim() : "";
+
+        contactMap.set(cleanPhone, {
+          id: `${cleanPhone}@s.whatsapp.net`,
+          number: cleanPhone,
+          name: registeredName || cleanPhone,
+          pushname: c.pushName || "",
+          isGroup: false
+        });
+      }
+    }
+
+    // 2. Fetch chats from /chat/findChats
+    const chatsRes = await evolutionFetch(`/chat/findChats/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      body: {}
+    });
+    const chatsList = Array.isArray(chatsRes.data)
+      ? chatsRes.data
+      : (chatsRes.data?.chats || chatsRes.data?.data || []);
+
+    if (Array.isArray(chatsList)) {
+      for (const chat of chatsList) {
+        const rawJid = chat.remoteJid || chat.id || "";
+        if (!rawJid || rawJid.includes("@g.us") || rawJid.includes("@broadcast") || rawJid.endsWith("newsletter")) {
+          continue;
+        }
+
+        const userPart = rawJid.split("@")[0];
+        if (isLid(rawJid) || isLid(userPart)) continue;
+        if (!isRealPhoneNumber(userPart)) continue;
+
+        const cleanPhone = normalizePhoneNumber(userPart);
+        const rawName = chat.pushName || chat.name || chat.displayName || "";
+        const isRegistered = isValidContactName(rawName, cleanPhone);
+        const registeredName = isRegistered ? rawName.trim() : "";
 
         const existing = contactMap.get(cleanPhone);
         if (existing) {
@@ -430,7 +467,7 @@ export const EvolutionApiProvider: WhatsappProvider = {
             id: `${cleanPhone}@s.whatsapp.net`,
             number: cleanPhone,
             name: registeredName || cleanPhone,
-            pushname: c.pushName || "",
+            pushname: chat.pushName || "",
             isGroup: false
           });
         }
@@ -442,8 +479,8 @@ export const EvolutionApiProvider: WhatsappProvider = {
   },
 
   sendSeen: async (sessionId: number, chatId: string): Promise<void> => {
-    const instanceName = getInstanceName({ id: sessionId });
-    await evolutionFetch(`/chat/markMessageAsRead/${instanceName}`, {
+    const instanceName = await resolveInstanceName({ id: sessionId });
+    await evolutionFetch(`/chat/markMessageAsRead/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       body: {
         readMessages: [{ remoteJid: chatId }]
@@ -456,8 +493,8 @@ export const EvolutionApiProvider: WhatsappProvider = {
     chatId: string,
     limit: number
   ): Promise<ProviderMessage[]> => {
-    const instanceName = getInstanceName({ id: sessionId });
-    const res = await evolutionFetch(`/chat/findMessages/${instanceName}`, {
+    const instanceName = await resolveInstanceName({ id: sessionId });
+    const res = await evolutionFetch(`/chat/findMessages/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       body: {
         where: {
@@ -472,8 +509,13 @@ export const EvolutionApiProvider: WhatsappProvider = {
     const messages = Array.isArray(res.data) ? res.data : (res.data?.messages || []);
     return messages.map((m: any) => ({
       id: m.key?.id || "",
+      body: m.message?.conversation || m.message?.extendedTextMessage?.text || "",
+      fromMe: Boolean(m.key?.fromMe),
+      hasMedia: Boolean(m.message?.imageMessage || m.message?.videoMessage || m.message?.audioMessage || m.message?.documentMessage),
+      type: m.messageType || "chat",
       timestamp: m.messageTimestamp || Math.floor(Date.now() / 1000),
-      fromMe: Boolean(m.key?.fromMe)
+      from: m.key?.remoteJid || "",
+      to: m.key?.fromMe ? m.key?.remoteJid : "me"
     }));
   }
 };
