@@ -599,11 +599,17 @@ const WhatsAppWebChat = () => {
   useEffect(() => {
     const socket = openSocket();
 
-    socket.on("connect", () => {
+    const join = () => {
       socket.emit("joinNotification");
-    });
+    };
 
-    socket.on("ticket", (data) => {
+    if (socket.connected) {
+      join();
+    } else {
+      socket.on("connect", join);
+    }
+
+    const onTicket = (data) => {
       if (!data) return;
 
       if (data.action === "updateUnread") {
@@ -633,17 +639,17 @@ const WhatsAppWebChat = () => {
         setChats((prev) => prev.filter((t) => t && t.id !== data.ticketId));
         return;
       }
-    });
+    };
 
-    socket.on("contact", (data) => {
+    const onContact = (data) => {
       if (data?.action === "update" && data.contact?.id) {
         if (data.contact.profilePicUrl) {
           setProfilePics((prev) => ({ ...prev, [data.contact.id]: data.contact.profilePicUrl }));
         }
       }
-    });
+    };
 
-    socket.on("appMessage", (data) => {
+    const onAppMessage = (data) => {
       if (data && data.action === "create" && data.message) {
         const msg = data.message;
         const tId = msg.ticketId;
@@ -667,10 +673,17 @@ const WhatsAppWebChat = () => {
           return prev;
         });
       }
-    });
+    };
+
+    socket.on("ticket", onTicket);
+    socket.on("contact", onContact);
+    socket.on("appMessage", onAppMessage);
 
     return () => {
-      socket.disconnect();
+      socket.off("ticket", onTicket);
+      socket.off("contact", onContact);
+      socket.off("appMessage", onAppMessage);
+      socket.off("connect", join);
     };
   }, [ticketId]);
 

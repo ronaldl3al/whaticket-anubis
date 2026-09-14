@@ -388,11 +388,23 @@ const MessagesList = ({ ticketId, isGroup }) => {
   useEffect(() => {
     const socket = openSocket();
 
-    socket.on("connect", () => socket.emit("joinChatBox", ticketId));
+    const join = () => {
+      socket.emit("joinChatBox", String(ticketId));
+      socket.emit("joinNotification");
+    };
 
-    socket.on("appMessage", (data) => {
+    if (socket.connected) {
+      join();
+    } else {
+      socket.on("connect", join);
+    }
+
+    const onAppMessage = (data) => {
       try {
         if (!data || !data.message) return;
+
+        // Ensure this message belongs to the current open chat
+        if (String(data.message.ticketId) !== String(ticketId)) return;
 
         if (data.action === "create") {
           dispatch({ type: "ADD_MESSAGE", payload: data.message });
@@ -407,10 +419,31 @@ const MessagesList = ({ ticketId, isGroup }) => {
       } catch (err) {
         console.warn("[MessagesList] Socket appMessage error:", err);
       }
-    });
+    };
+
+    socket.on("appMessage", onAppMessage);
+
+    const handleLocalMessage = (e) => {
+      try {
+        const msg = e.detail;
+        if (msg && String(msg.ticketId) === String(ticketId)) {
+          dispatch({ type: "ADD_MESSAGE", payload: msg });
+          setTimeout(() => {
+            scrollToBottom();
+          }, 50);
+        }
+      } catch (err) {
+        console.warn("[MessagesList] Error adding local message:", err);
+      }
+    };
+
+    window.addEventListener("localMessageSent", handleLocalMessage);
 
     return () => {
-      socket.disconnect();
+      socket.off("appMessage", onAppMessage);
+      socket.off("connect", join);
+      socket.emit("leaveChatBox", String(ticketId));
+      window.removeEventListener("localMessageSent", handleLocalMessage);
     };
   }, [ticketId]);
 
@@ -754,6 +787,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
         onScroll={handleScroll}
       >
         {messagesList.length > 0 ? renderMessages() : []}
+        <div ref={lastMessageRef} style={{ float: "left", clear: "both" }} />
       </div>
       {loading && (
         <div>

@@ -53,17 +53,18 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   SetTicketMessagesAsRead(ticket);
 
+  let result: any = null;
   if (medias) {
-    await Promise.all(
+    result = await Promise.all(
       medias.map(async (media: Express.Multer.File) => {
-        await SendWhatsAppMedia({ media, ticket, quotedMsg: parsedQuotedMsg });
+        return await SendWhatsAppMedia({ media, ticket, quotedMsg: parsedQuotedMsg });
       })
     );
   } else {
-    await SendWhatsAppMessage({ body, ticket, quotedMsg: parsedQuotedMsg });
+    result = await SendWhatsAppMessage({ body, ticket, quotedMsg: parsedQuotedMsg });
   }
 
-  return res.send();
+  return res.json(result);
 };
 
 export const remove = async (

@@ -50,8 +50,9 @@ const SendWhatsAppMessage = async ({
 
     await ticket.update({ lastMessage: body });
 
+    let createdMsg = null;
     try {
-      await CreateMessageService({
+      createdMsg = await CreateMessageService({
         messageData: {
           id: sentMessage.id,
           ticketId: ticket.id,
@@ -68,7 +69,7 @@ const SendWhatsAppMessage = async ({
       console.error("Error creating outgoing message record:", saveErr);
     }
 
-    return sentMessage;
+    return (createdMsg || sentMessage) as any;
   } catch (err) {
     console.error("DEBUG_SEND_ERROR:", err);
     throw new AppError("ERR_SENDING_WAPP_MSG");

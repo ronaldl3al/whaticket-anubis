@@ -12,14 +12,19 @@ function getSafeToken() {
   }
 }
 
+let socketInstance = null;
+
 function connectToSocket() {
   const token = getSafeToken();
-  return openSocket(getBackendUrl(), {
-    transports: ["websocket", "polling"],
-    query: {
-      token,
-    },
-  });
+  if (!socketInstance || socketInstance.disconnected) {
+    socketInstance = openSocket(getBackendUrl(), {
+      transports: ["websocket", "polling"],
+      query: {
+        token,
+      },
+    });
+  }
+  return socketInstance;
 }
 
 export default connectToSocket;

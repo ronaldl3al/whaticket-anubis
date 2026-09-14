@@ -279,7 +279,14 @@ const MessageInput = ({ ticketId: propTicketId, ticketStatus }) => {
     });
 
     try {
-      await api.post(`/messages/${ticketId}`, formData);
+      const { data: sentData } = await api.post(`/messages/${ticketId}`, formData);
+      if (Array.isArray(sentData)) {
+        sentData.forEach((m) => {
+          if (m && m.id) window.dispatchEvent(new CustomEvent("localMessageSent", { detail: m }));
+        });
+      } else if (sentData && sentData.id) {
+        window.dispatchEvent(new CustomEvent("localMessageSent", { detail: sentData }));
+      }
       setMedias([]);
       setQuickMedia(null);
       setInputMessage("");
@@ -312,7 +319,10 @@ const MessageInput = ({ ticketId: propTicketId, ticketStatus }) => {
       if (ticketStatus === "pending") {
         api.put(`/tickets/${ticketId}`, { status: "open" }).catch(() => {});
       }
-      await api.post(`/messages/${ticketId}`, message);
+      const { data: sentMessage } = await api.post(`/messages/${ticketId}`, message);
+      if (sentMessage && sentMessage.id) {
+        window.dispatchEvent(new CustomEvent("localMessageSent", { detail: sentMessage }));
+      }
       setInputMessage("");
       setQuickMedia(null);
       setShowEmoji(false);
