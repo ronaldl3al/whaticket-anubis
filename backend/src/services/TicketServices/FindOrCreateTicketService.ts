@@ -35,8 +35,7 @@ const FindOrCreateTicketService = async (
 
     if (ticket) {
       await ticket.update({
-        status: "pending",
-        userId: null,
+        status: "open",
         unreadMessages
       });
     }
@@ -53,8 +52,7 @@ const FindOrCreateTicketService = async (
 
     if (ticket) {
       await ticket.update({
-        status: "pending",
-        userId: null,
+        status: "open",
         unreadMessages
       });
     }
@@ -63,7 +61,7 @@ const FindOrCreateTicketService = async (
   if (!ticket) {
     ticket = await Ticket.create({
       contactId: groupContact ? groupContact.id : contact.id,
-      status: "pending",
+      status: "open",
       isGroup: !!groupContact,
       unreadMessages,
       whatsappId

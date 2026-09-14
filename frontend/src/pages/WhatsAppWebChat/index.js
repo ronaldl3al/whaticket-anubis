@@ -743,7 +743,7 @@ const WhatsAppWebChat = () => {
                       </div>
                       <div className={classes.chatDetailsBottom}>
                         <Typography className={classes.chatMessageSnippet}>
-                          {chat.lastMessage || "Sin mensajes"}
+                          {typeof chat.lastMessage === "string" ? chat.lastMessage : (chat.lastMessage ? String(chat.lastMessage) : "Sin mensajes")}
                         </Typography>
                         {chat.unreadMessages > 0 && (
                           <div className={classes.unreadBadge}>

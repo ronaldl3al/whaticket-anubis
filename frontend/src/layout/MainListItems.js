@@ -73,30 +73,10 @@ const MainListItems = (props) => {
   return (
     <div onClick={drawerClose}>
       <ListItemLink
-        to="/"
-        primary="Dashboard"
-        icon={<DashboardOutlinedIcon />}
-      />
-      <ListItemLink
         to="/chats"
         primary="Chats"
-        icon={<WhatsAppIcon style={{ color: "#B58863" }} />}
+        icon={<WhatsAppIcon style={{ color: "#00a884" }} />}
       />
-      <ListItemLink
-        to="/connections"
-        primary={i18n.t("mainDrawer.listItems.connections")}
-        icon={
-          <Badge badgeContent={connectionWarning ? "!" : 0} color="error">
-            <SyncAltIcon />
-          </Badge>
-        }
-      />
-      <ListItemLink
-        to="/tickets"
-        primary={i18n.t("mainDrawer.listItems.tickets")}
-        icon={<WhatsAppIcon />}
-      />
-
       <ListItemLink
         to="/contacts"
         primary={i18n.t("mainDrawer.listItems.contacts")}
@@ -107,6 +87,16 @@ const MainListItems = (props) => {
         primary={i18n.t("mainDrawer.listItems.quickAnswers")}
         icon={<QuestionAnswerOutlinedIcon />}
       />
+      <ListItemLink
+        to="/connections"
+        primary={i18n.t("mainDrawer.listItems.connections")}
+        icon={
+          <Badge badgeContent={connectionWarning ? "!" : 0} color="error">
+            <SyncAltIcon />
+          </Badge>
+        }
+      />
+
       <Can
         role={user.profile}
         perform="drawer-admin-items:view"
@@ -120,11 +110,6 @@ const MainListItems = (props) => {
               to="/users"
               primary={i18n.t("mainDrawer.listItems.users")}
               icon={<PeopleAltOutlinedIcon />}
-            />
-            <ListItemLink
-              to="/queues"
-              primary={i18n.t("mainDrawer.listItems.queues")}
-              icon={<AccountTreeOutlinedIcon />}
             />
             <ListItemLink
               to="/settings"

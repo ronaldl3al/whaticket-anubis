@@ -283,26 +283,30 @@ const reducer = (state, action) => {
 
   if (action.type === "ADD_MESSAGE") {
     const newMessage = action.payload;
+    if (!newMessage || !newMessage.id) return state;
     const messageIndex = state.findIndex((m) => m.id === newMessage.id);
 
     if (messageIndex !== -1) {
-      state[messageIndex] = newMessage;
-    } else {
-      state.push(newMessage);
+      const newState = [...state];
+      newState[messageIndex] = newMessage;
+      return newState;
     }
 
-    return [...state];
+    return [...state, newMessage];
   }
 
   if (action.type === "UPDATE_MESSAGE") {
     const messageToUpdate = action.payload;
+    if (!messageToUpdate || !messageToUpdate.id) return state;
     const messageIndex = state.findIndex((m) => m.id === messageToUpdate.id);
 
     if (messageIndex !== -1) {
-      state[messageIndex] = messageToUpdate;
+      const newState = [...state];
+      newState[messageIndex] = messageToUpdate;
+      return newState;
     }
 
-    return [...state];
+    return state;
   }
 
   if (action.type === "RESET") {
@@ -439,7 +443,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
   };
 
   const checkMessageMedia = (message) => {
-    if (!message) return null;
+    if (!message || message.mediaType === "chat" || !message.mediaType) return null;
     if (message.mediaType === "location" && message.body && typeof message.body === "string" && message.body.split('|').length >= 2) {
       let locationParts = message.body.split('|')
       let imageLocation = locationParts[0] || ""
@@ -453,8 +457,6 @@ const MessagesList = ({ ticketId, isGroup }) => {
       return <LocationPreview image={imageLocation} link={linkLocation} description={descriptionLocation} />
     }
     else if (message.mediaType === "vcard" && message.body && typeof message.body === "string") {
-      //console.log("vcard")
-      //console.log(message)
       let array = message.body.split("\n");
       let obj = [];
       let contact = "";
@@ -472,28 +474,11 @@ const MessagesList = ({ ticketId, isGroup }) => {
       }
       return <VcardPreview contact={contact} numbers={obj[0]?.number} />
     }
-    /*else if (message.mediaType === "multi_vcard") {
-      console.log("multi_vcard")
-      console.log(message)
-    	
-      if(message.body !== null && message.body !== "") {
-        let newBody = JSON.parse(message.body)
-        return (
-          <>
-            {
-            newBody.map(v => (
-              <VcardPreview contact={v.name} numbers={v.number} />
-            ))
-            }
-          </>
-        )
-      } else return (<></>)
-    }*/
-    else if ( /^.*\.(jpe?g|png|gif)?$/i.exec(message.mediaUrl) && message.mediaType === "image") {
+    else if (message.mediaType === "image" && message.mediaUrl) {
       return <ModalImageCors imageUrl={message.mediaUrl} />;
-    } else if (message.mediaType === "audio") {
+    } else if (message.mediaType === "audio" && message.mediaUrl) {
       return <Audio url={message.mediaUrl} />
-    } else if (message.mediaType === "video") {
+    } else if (message.mediaType === "video" && message.mediaUrl) {
       return (
         <video
           className={classes.messageMedia}
@@ -501,7 +486,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
           controls
         />
       );
-    } else {
+    } else if (message.mediaUrl && message.mediaUrl !== "/public/" && !message.mediaUrl.endsWith("/public/")) {
       return (
         <>
           <div className={classes.downloadMedia}>
@@ -519,6 +504,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
         </>
       );
     }
+    return null;
   };
 
   const renderMessageAck = (message) => {
@@ -639,7 +625,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
               /\.(mp3|ogg|wav)$/i.test(message.quotedMsg.mediaUrl)) ? (
             <span>🎵 Audio</span>
           ) : (
-            message.quotedMsg?.body
+            typeof message.quotedMsg?.body === "string" ? message.quotedMsg.body : String(message.quotedMsg?.body || "")
           )}
         </div>
       </div>
@@ -675,7 +661,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
                 ) && checkMessageMedia(message)}
                 <div className={classes.textContentItem}>
                   {message.quotedMsg && renderQuotedMessage(message)}
-                  <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                  <MarkdownWrapper>{typeof message.body === "string" ? message.body : String(message.body || "")}</MarkdownWrapper>
                   <span className={classes.timestamp}>
                     {safeFormatTime(message.createdAt)}
                   </span>
@@ -715,7 +701,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
                     />
                   )}
                   {message.quotedMsg && renderQuotedMessage(message)}
-                  <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                  <MarkdownWrapper>{typeof message.body === "string" ? message.body : String(message.body || "")}</MarkdownWrapper>
                   <span className={classes.timestamp}>
                     {safeFormatTime(message.createdAt)}
                     {renderMessageAck(message)}

@@ -144,11 +144,11 @@ const TicketListItem = ({ ticket }) => {
 		if (isMounted.current) {
 			setLoading(false);
 		}
-		history.push(`/tickets/${id}`);
+		history.push(`/chats/${id}`);
 	};
 
 	const handleSelectTicket = id => {
-		history.push(`/tickets/${id}`);
+		history.push(`/chats/${id}`);
 	};
 
 	return (
@@ -157,7 +157,6 @@ const TicketListItem = ({ ticket }) => {
 				dense
 				button
 				onClick={e => {
-					if (ticket.status === "pending") return;
 					handleSelectTicket(ticket.id);
 				}}
 				selected={ticketId && +ticketId === ticket.id}

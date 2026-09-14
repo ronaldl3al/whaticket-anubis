@@ -149,22 +149,38 @@ const CustomLink = ({ children, ...props }) => (
 	</a>
 );
 
-const MarkdownWrapper = ({ children }) => {
-	const boldRegex = /\*(.*?)\*/g;
-	const tildaRegex = /~(.*?)~/g;
-	
-	if(children && children.includes('BEGIN:VCARD'))
-		//children = "Diga olá ao seu novo contato clicando em *conversar*!";
-		children = null;
-	
-	if(children && children.includes('data:image/'))
-		children = null;
-	
-	if (children && boldRegex.test(children)) {
-		children = children.replace(boldRegex, "**$1**");
+class MarkdownErrorBoundary extends React.Component {
+	constructor(props) {
+		super(props);
+		this.state = { hasError: false };
 	}
-	if (children && tildaRegex.test(children)) {
-		children = children.replace(tildaRegex, "~~$1~~");
+	static getDerivedStateFromError() {
+		return { hasError: true };
+	}
+	render() {
+		if (this.state.hasError) {
+			return <span>{this.props.fallback}</span>;
+		}
+		return this.props.children;
+	}
+}
+
+const MarkdownWrapper = ({ children }) => {
+	if (!children) return null;
+	if (typeof children !== "string") {
+		return <span>{String(children)}</span>;
+	}
+
+	let content = children;
+	if (content.includes("BEGIN:VCARD") || content.includes("data:image/")) {
+		return null;
+	}
+
+	try {
+		content = content.replace(/\*(.*?)\*/g, "**$1**");
+		content = content.replace(/~(.*?)~/g, "~~$1~~");
+	} catch (e) {
+		content = children;
 	}
 
 	const options = React.useMemo(() => {
@@ -185,9 +201,11 @@ const MarkdownWrapper = ({ children }) => {
 		return markdownOptions;
 	}, []);
 
-	if (!children) return null;
-	
-	return <Markdown options={options}>{children}</Markdown>;
+	return (
+		<MarkdownErrorBoundary fallback={children}>
+			<Markdown options={options}>{content}</Markdown>
+		</MarkdownErrorBoundary>
+	);
 };
 
 export default MarkdownWrapper;
