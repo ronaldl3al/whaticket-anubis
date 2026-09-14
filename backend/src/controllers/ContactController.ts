@@ -241,3 +241,25 @@ export const deleteInvalidContacts = async (
   const result = await DeleteInvalidContactsService();
   return res.status(200).json(result);
 };
+
+export const getProfilePic = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { contactId } = req.params;
+  try {
+    const contact = await ShowContactService(contactId);
+    if (!contact.profilePicUrl && contact.number) {
+      const picUrl = await GetProfilePicUrl(contact.number);
+      if (picUrl) {
+        await contact.update({ profilePicUrl: picUrl });
+        const io = getIO();
+        io.emit("contact", { action: "update", contact });
+        return res.json({ profilePicUrl: picUrl });
+      }
+    }
+    return res.json({ profilePicUrl: contact.profilePicUrl || "" });
+  } catch (err) {
+    return res.json({ profilePicUrl: "" });
+  }
+};

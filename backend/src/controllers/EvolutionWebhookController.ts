@@ -274,16 +274,29 @@ export const handleEvolutionWebhook = async (
           const finalName = isReg ? rawName.trim() : cleanNum;
 
           const existing = await Contact.findOne({ where: { number: cleanNum } });
+          const pic = item.profilePictureUrl || item.profilePicUrl || item.pictureUrl || item.picture || "";
           if (!existing) {
             const created = await Contact.create({
               name: finalName,
               number: cleanNum,
+              profilePicUrl: pic,
               isGroup: false
             });
             io.emit("contact", { action: "create", contact: created });
-          } else if (isReg && existing.name !== finalName) {
-            await existing.update({ name: finalName });
-            io.emit("contact", { action: "update", contact: existing });
+          } else {
+            let updated = false;
+            if (isReg && existing.name !== finalName) {
+              existing.name = finalName;
+              updated = true;
+            }
+            if (!existing.profilePicUrl && pic) {
+              existing.profilePicUrl = pic;
+              updated = true;
+            }
+            if (updated) {
+              await existing.save();
+              io.emit("contact", { action: "update", contact: existing });
+            }
           }
         }
         break;

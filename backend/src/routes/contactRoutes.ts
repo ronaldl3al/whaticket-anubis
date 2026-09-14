@@ -43,6 +43,8 @@ contactRoutes.post(
 
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 
+contactRoutes.get("/contacts/:contactId/profile-pic", isAuth, ContactController.getProfilePic);
+
 contactRoutes.get("/contacts/:contactId", isAuth, ContactController.show);
 
 contactRoutes.post("/contacts", isAuth, ContactController.store);

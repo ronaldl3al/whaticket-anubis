@@ -319,6 +319,9 @@ const MessageInput = ({ ticketStatus }) => {
       quotedMsg: replyingMessage,
     };
     try {
+      if (ticketStatus === "pending") {
+        api.put(`/tickets/${ticketId}`, { status: "open" }).catch(() => {});
+      }
       await api.post(`/messages/${ticketId}`, message);
     } catch (err) {
       toastError(err);
@@ -503,7 +506,7 @@ const MessageInput = ({ ticketStatus }) => {
             <IconButton
               aria-label="emojiPicker"
               component="span"
-              disabled={loading || recording || ticketStatus !== "open"}
+              disabled={loading || recording}
               onClick={e => setShowEmoji(prevState => !prevState)}
             >
               <MoodIcon className={classes.sendMessageIcons} />
@@ -525,7 +528,7 @@ const MessageInput = ({ ticketStatus }) => {
               multiple
               type="file"
               id="upload-button"
-              disabled={loading || recording || ticketStatus !== "open"}
+              disabled={loading || recording}
               className={classes.uploadInput}
               onChange={handleChangeMedias}
             />
@@ -533,7 +536,7 @@ const MessageInput = ({ ticketStatus }) => {
               <IconButton
                 aria-label="upload"
                 component="span"
-                disabled={loading || recording || ticketStatus !== "open"}
+                disabled={loading || recording}
               >
                 <AttachFileIcon className={classes.sendMessageIcons} />
               </IconButton>
@@ -626,19 +629,13 @@ const MessageInput = ({ ticketStatus }) => {
                 input && (inputRef.current = input);
               }}
               className={classes.messageInput}
-              placeholder={
-                ticketStatus === "open"
-                  ? i18n.t("messagesInput.placeholderOpen")
-                  : i18n.t("messagesInput.placeholderClosed")
-              }
+              placeholder="Escribe un mensaje"
               multiline
               maxRows={5}
               value={inputMessage}
               onChange={handleChangeInput}
-              disabled={recording || loading || ticketStatus !== "open"}
-              onPaste={e => {
-                ticketStatus === "open" && handleInputPaste(e);
-              }}
+              disabled={recording || loading}
+              onPaste={handleInputPaste}
               onKeyPress={e => {
                 if (loading || e.shiftKey) return;
                 else if (e.key === "Enter") {

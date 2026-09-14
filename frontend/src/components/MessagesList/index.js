@@ -42,7 +42,7 @@ const useStyles = makeStyles((theme) => ({
   },
 
   messagesList: {
-    backgroundColor: "#10232A",
+    backgroundColor: "#0b141a",
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
@@ -55,7 +55,7 @@ const useStyles = makeStyles((theme) => ({
   },
 
   circleLoading: {
-    color: "#B58863",
+    color: "#00a884",
     position: "absolute",
     opacity: "70%",
     top: 0,
@@ -79,24 +79,24 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#3D4D55",
-    color: "#D3C3B9",
+    backgroundColor: "#202c33",
+    color: "#e9edef",
     alignSelf: "flex-start",
     borderTopLeftRadius: 0,
     borderTopRightRadius: 8,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
-    paddingLeft: 5,
-    paddingRight: 5,
-    paddingTop: 5,
-    paddingBottom: 0,
-    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+    paddingLeft: 6,
+    paddingRight: 6,
+    paddingTop: 6,
+    paddingBottom: 2,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
   },
 
   quotedContainerLeft: {
     margin: "-3px -80px 6px -6px",
     overflow: "hidden",
-    backgroundColor: "#2a3a42",
+    backgroundColor: "#182229",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -114,7 +114,7 @@ const useStyles = makeStyles((theme) => ({
   quotedSideColorLeft: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#B58863",
+    backgroundColor: "#53bdeb",
   },
 
   messageRight: {
@@ -133,24 +133,24 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#1a3a4a",
-    color: "#D3C3B9",
+    backgroundColor: "#005c4b",
+    color: "#e9edef",
     alignSelf: "flex-end",
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 0,
-    paddingLeft: 5,
-    paddingRight: 5,
-    paddingTop: 5,
-    paddingBottom: 0,
-    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+    paddingLeft: 6,
+    paddingRight: 6,
+    paddingTop: 6,
+    paddingBottom: 2,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
   },
 
   quotedContainerRight: {
     margin: "-3px -80px 6px -6px",
     overflowY: "hidden",
-    backgroundColor: "#15303e",
+    backgroundColor: "#025144",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -166,7 +166,7 @@ const useStyles = makeStyles((theme) => ({
   quotedSideColorRight: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#B58863",
+    backgroundColor: "#25d366",
   },
 
   messageActionsButton: {
@@ -181,18 +181,19 @@ const useStyles = makeStyles((theme) => ({
 
   messageContactName: {
     display: "flex",
-    color: "#B58863",
+    color: "#53bdeb",
     fontWeight: 500,
   },
 
   textContentItem: {
     overflowWrap: "break-word",
     padding: "3px 80px 6px 6px",
+    color: "#e9edef",
   },
 
   textContentItemDeleted: {
     fontStyle: "italic",
-    color: "rgba(211, 195, 185, 0.4)",
+    color: "rgba(233, 237, 239, 0.4)",
     overflowWrap: "break-word",
     padding: "3px 80px 6px 6px",
   },
@@ -212,7 +213,7 @@ const useStyles = makeStyles((theme) => ({
     position: "absolute",
     bottom: 0,
     right: 5,
-    color: "#A79E9C",
+    color: "#8696a0",
   },
 
   dailyTimestamp: {
@@ -220,15 +221,16 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "center",
     alignSelf: "center",
     width: "110px",
-    backgroundColor: "#1a2e36",
+    backgroundColor: "#182229",
     margin: "10px",
-    borderRadius: "10px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+    borderRadius: "8px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.5)",
   },
 
   dailyTimestampText: {
-    color: "#D3C3B9",
-    padding: 8,
+    color: "#8696a0",
+    padding: 6,
+    fontSize: 12,
     alignSelf: "center",
     marginLeft: "0px",
   },
@@ -237,6 +239,7 @@ const useStyles = makeStyles((theme) => ({
     fontSize: 18,
     verticalAlign: "middle",
     marginLeft: 4,
+    color: "#8696a0",
   },
 
   deletedIcon: {
@@ -246,7 +249,7 @@ const useStyles = makeStyles((theme) => ({
   },
 
   ackDoneAllIcon: {
-    color: "#B58863",
+    color: "#53bdeb",
     fontSize: 18,
     verticalAlign: "middle",
     marginLeft: 4,
@@ -304,6 +307,26 @@ const reducer = (state, action) => {
 
   if (action.type === "RESET") {
     return [];
+  }
+};
+
+const safeFormatTime = (dateStr) => {
+  if (!dateStr) return "";
+  try {
+    const d = typeof dateStr === "string" ? parseISO(dateStr) : new Date(dateStr);
+    return isNaN(d.getTime()) ? "" : format(d, "HH:mm");
+  } catch (e) {
+    return "";
+  }
+};
+
+const safeFormatDate = (dateStr) => {
+  if (!dateStr) return "";
+  try {
+    const d = typeof dateStr === "string" ? parseISO(dateStr) : new Date(dateStr);
+    return isNaN(d.getTime()) ? "" : format(d, "dd/MM/yyyy");
+  } catch (e) {
+    return "";
   }
 };
 
@@ -416,10 +439,11 @@ const MessagesList = ({ ticketId, isGroup }) => {
   };
 
   const checkMessageMedia = (message) => {
-    if (message.mediaType === "location" && message.body.split('|').length >= 2) {
+    if (!message) return null;
+    if (message.mediaType === "location" && message.body && typeof message.body === "string" && message.body.split('|').length >= 2) {
       let locationParts = message.body.split('|')
-      let imageLocation = locationParts[0]
-      let linkLocation = locationParts[1]
+      let imageLocation = locationParts[0] || ""
+      let linkLocation = locationParts[1] || ""
 
       let descriptionLocation = null
 
@@ -428,21 +452,21 @@ const MessagesList = ({ ticketId, isGroup }) => {
 
       return <LocationPreview image={imageLocation} link={linkLocation} description={descriptionLocation} />
     }
-    else if (message.mediaType === "vcard") {
+    else if (message.mediaType === "vcard" && message.body && typeof message.body === "string") {
       //console.log("vcard")
       //console.log(message)
       let array = message.body.split("\n");
       let obj = [];
       let contact = "";
       for (let index = 0; index < array.length; index++) {
-        const v = array[index];
+        const v = array[index] || "";
         let values = v.split(":");
         for (let ind = 0; ind < values.length; ind++) {
-          if (values[ind].indexOf("+") !== -1) {
+          if (values[ind] && values[ind].indexOf("+") !== -1) {
             obj.push({ number: values[ind] });
           }
-          if (values[ind].indexOf("FN") !== -1) {
-            contact = values[ind + 1];
+          if (values[ind] && values[ind].indexOf("FN") !== -1) {
+            contact = values[ind + 1] || "";
           }
         }
       }
@@ -520,32 +544,34 @@ const MessagesList = ({ ticketId, isGroup }) => {
           key={`timestamp-${message.id}`}
         >
           <div className={classes.dailyTimestampText}>
-            {format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
+            {safeFormatDate(messagesList[index]?.createdAt)}
           </div>
         </span>
       );
     }
-    if (index < messagesList.length - 1) {
-      let messageDay = parseISO(messagesList[index].createdAt);
-      let previousMessageDay = parseISO(messagesList[index - 1].createdAt);
+    if (index < messagesList.length - 1 && messagesList[index]?.createdAt && messagesList[index - 1]?.createdAt) {
+      try {
+        let messageDay = parseISO(messagesList[index].createdAt);
+        let previousMessageDay = parseISO(messagesList[index - 1].createdAt);
 
-      if (!isSameDay(messageDay, previousMessageDay)) {
-        return (
-          <span
-            className={classes.dailyTimestamp}
-            key={`timestamp-${message.id}`}
-          >
-            <div className={classes.dailyTimestampText}>
-              {format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
-            </div>
-          </span>
-        );
-      }
+        if (!isSameDay(messageDay, previousMessageDay)) {
+          return (
+            <span
+              className={classes.dailyTimestamp}
+              key={`timestamp-${message.id}`}
+            >
+              <div className={classes.dailyTimestampText}>
+                {safeFormatDate(messagesList[index].createdAt)}
+              </div>
+            </span>
+          );
+        }
+      } catch (e) {}
     }
     if (index === messagesList.length - 1) {
       return (
         <div
-          key={`ref-${message.createdAt}`}
+          key={`ref-${message.createdAt || index}`}
           ref={lastMessageRef}
           style={{ float: "left", clear: "both" }}
         />
@@ -651,7 +677,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
                   {message.quotedMsg && renderQuotedMessage(message)}
                   <MarkdownWrapper>{message.body}</MarkdownWrapper>
                   <span className={classes.timestamp}>
-                    {format(parseISO(message.createdAt), "HH:mm")}
+                    {safeFormatTime(message.createdAt)}
                   </span>
                 </div>
               </div>
@@ -691,7 +717,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
                   {message.quotedMsg && renderQuotedMessage(message)}
                   <MarkdownWrapper>{message.body}</MarkdownWrapper>
                   <span className={classes.timestamp}>
-                    {format(parseISO(message.createdAt), "HH:mm")}
+                    {safeFormatTime(message.createdAt)}
                     {renderMessageAck(message)}
                   </span>
                 </div>

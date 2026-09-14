@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
 import { useParams, useHistory } from "react-router-dom";
 import { makeStyles } from "@material-ui/core/styles";
 import Avatar from "@material-ui/core/Avatar";
@@ -20,16 +20,21 @@ import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMess
 import MessagesList from "../../components/MessagesList";
 import MessageInput from "../../components/MessageInput";
 
-// Anubis Store Dark Palette
+// WhatsApp Desktop Dark Theme Palette
 const C = {
-  deepNavy: "#10232A",
-  panelBg: "#1a2e36",
-  slateGray: "#3D4D55",
-  warmGray: "#A79E9C",
-  warmBeige: "#D3C3B9",
-  goldAccent: "#B58863",
-  pureBlack: "#161616",
-  divider: "rgba(61,77,85,0.35)",
+  black: "#0b141a",         // deepest background for conversation panel
+  darkPanel: "#111b21",     // chat list background
+  cardHover: "#202c33",     // hover on chat list item
+  cardActive: "#2a3942",    // active selected chat item
+  headerBg: "#202c33",      // top headers
+  inputField: "#202c33",    // search field background
+  inputFocus: "#2a3942",    // search field focused
+  divider: "#222d34",       // subtle panel separator
+  textPrimary: "#e9edef",   // clean white/light text
+  textSecondary: "#8696a0", // muted gray text
+  greenAccent: "#00a884",   // WhatsApp green
+  goldBadge: "#B58863",     // Anubis Store gold accent
+  blueCheck: "#53bdeb",     // WhatsApp checkmarks & links
 };
 
 const useStyles = makeStyles((theme) => ({
@@ -37,23 +42,22 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     height: "calc(100vh - 48px)",
     overflow: "hidden",
-    backgroundColor: C.deepNavy,
+    backgroundColor: C.darkPanel,
+    position: "relative",
+    userSelect: (props) => (props.isResizing ? "none" : "auto"),
   },
 
-  /* ─── LEFT PANEL ─── */
+  /* ─── LEFT PANEL (CHAT LIST) ─── */
   leftPanel: {
-    width: "380px",
-    minWidth: "320px",
-    maxWidth: "460px",
     height: "100%",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: C.deepNavy,
+    backgroundColor: C.darkPanel,
     borderRight: `1px solid ${C.divider}`,
     zIndex: 2,
+    flexShrink: 0,
     [theme.breakpoints.down("sm")]: {
-      width: "100%",
-      maxWidth: "100%",
+      width: "100% !important",
     },
   },
   leftPanelHiddenMobile: {
@@ -64,7 +68,7 @@ const useStyles = makeStyles((theme) => ({
 
   headerLeft: {
     height: "60px",
-    backgroundColor: C.pureBlack,
+    backgroundColor: C.headerBg,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -73,19 +77,18 @@ const useStyles = makeStyles((theme) => ({
   },
   headerLeftTitle: {
     fontWeight: 600,
-    fontSize: "1.1rem",
-    color: C.warmBeige,
+    fontSize: "1.15rem",
+    color: C.textPrimary,
     display: "flex",
     alignItems: "center",
     gap: "10px",
-    letterSpacing: "0.3px",
   },
   headerBrand: {
     display: "inline-flex",
     alignItems: "center",
     gap: "6px",
-    backgroundColor: C.goldAccent,
-    color: C.pureBlack,
+    backgroundColor: C.greenAccent,
+    color: "#111b21",
     fontWeight: 700,
     fontSize: "0.72rem",
     padding: "3px 10px",
@@ -96,27 +99,27 @@ const useStyles = makeStyles((theme) => ({
 
   searchContainer: {
     padding: "10px 12px",
-    backgroundColor: C.deepNavy,
+    backgroundColor: C.darkPanel,
     borderBottom: `1px solid ${C.divider}`,
   },
   searchWrapper: {
     display: "flex",
     alignItems: "center",
-    backgroundColor: C.panelBg,
+    backgroundColor: C.inputField,
     borderRadius: "8px",
-    padding: "6px 12px",
+    padding: "5px 12px",
     transition: "background-color 0.2s ease",
     "&:focus-within": {
-      backgroundColor: C.slateGray,
+      backgroundColor: C.inputFocus,
     },
   },
   searchInput: {
     marginLeft: "8px",
     flex: 1,
     fontSize: "0.88rem",
-    color: C.warmBeige,
+    color: C.textPrimary,
     "&::placeholder": {
-      color: C.warmGray,
+      color: C.textSecondary,
       opacity: 1,
     },
   },
@@ -124,45 +127,46 @@ const useStyles = makeStyles((theme) => ({
   filterPills: {
     display: "flex",
     gap: "8px",
-    padding: "8px 12px 12px 12px",
-    backgroundColor: C.deepNavy,
+    padding: "8px 12px 10px 12px",
+    backgroundColor: C.darkPanel,
     borderBottom: `1px solid ${C.divider}`,
     overflowX: "auto",
   },
   pill: {
-    fontSize: "0.8rem",
+    fontSize: "0.82rem",
     fontWeight: 500,
     cursor: "pointer",
-    borderRadius: "16px",
+    borderRadius: "18px",
     padding: "5px 14px",
-    backgroundColor: C.panelBg,
-    color: C.warmGray,
+    backgroundColor: C.inputField,
+    color: C.textSecondary,
     border: "none",
     outline: "none",
-    transition: "all 0.2s ease",
+    transition: "all 0.15s ease",
     "&:hover": {
-      backgroundColor: C.slateGray,
-      color: C.warmBeige,
+      backgroundColor: C.cardHover,
+      color: C.textPrimary,
     },
   },
   pillActive: {
-    backgroundColor: `${C.goldAccent} !important`,
-    color: `${C.pureBlack} !important`,
+    backgroundColor: `${C.greenAccent} !important`,
+    color: "#111b21 !important",
     fontWeight: 700,
   },
 
   chatList: {
     flex: 1,
     overflowY: "auto",
-    backgroundColor: C.deepNavy,
+    backgroundColor: C.darkPanel,
+    padding: "4px 8px",
     "&::-webkit-scrollbar": {
       width: "5px",
     },
     "&::-webkit-scrollbar-track": {
-      backgroundColor: C.deepNavy,
+      backgroundColor: C.darkPanel,
     },
     "&::-webkit-scrollbar-thumb": {
-      backgroundColor: C.slateGray,
+      backgroundColor: C.cardHover,
       borderRadius: "3px",
     },
   },
@@ -170,29 +174,27 @@ const useStyles = makeStyles((theme) => ({
   chatItem: {
     display: "flex",
     alignItems: "center",
-    padding: "12px 14px",
+    padding: "10px 12px",
     cursor: "pointer",
-    borderBottom: `1px solid ${C.divider}`,
+    borderRadius: "8px",
+    marginBottom: "2px",
     transition: "background-color 0.15s ease",
     "&:hover": {
-      backgroundColor: C.panelBg,
+      backgroundColor: C.cardHover,
     },
   },
   chatItemActive: {
-    backgroundColor: `${C.slateGray} !important`,
-    borderLeft: `3px solid ${C.goldAccent}`,
-    paddingLeft: "11px",
+    backgroundColor: `${C.cardActive} !important`,
   },
 
   chatAvatar: {
-    width: "48px",
-    height: "48px",
-    backgroundColor: C.slateGray,
-    color: C.warmBeige,
+    width: "46px",
+    height: "46px",
+    backgroundColor: C.cardHover,
+    color: C.textPrimary,
     fontWeight: 600,
     fontSize: "1.1rem",
     marginRight: "12px",
-    border: `2px solid ${C.divider}`,
   },
 
   chatDetails: {
@@ -210,14 +212,14 @@ const useStyles = makeStyles((theme) => ({
   chatName: {
     fontWeight: 600,
     fontSize: "0.95rem",
-    color: C.warmBeige,
+    color: C.textPrimary,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
   chatTime: {
     fontSize: "0.72rem",
-    color: C.warmGray,
+    color: C.textSecondary,
     marginLeft: "6px",
     flexShrink: 0,
   },
@@ -228,7 +230,7 @@ const useStyles = makeStyles((theme) => ({
   },
   chatMessageSnippet: {
     fontSize: "0.84rem",
-    color: C.warmGray,
+    color: C.textSecondary,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -238,8 +240,8 @@ const useStyles = makeStyles((theme) => ({
   },
 
   unreadBadge: {
-    backgroundColor: C.goldAccent,
-    color: C.pureBlack,
+    backgroundColor: C.greenAccent,
+    color: "#111b21",
     borderRadius: "10px",
     fontSize: "0.73rem",
     fontWeight: 700,
@@ -252,14 +254,32 @@ const useStyles = makeStyles((theme) => ({
     marginLeft: "6px",
   },
 
-  /* ─── RIGHT PANEL ─── */
+  /* ─── RESIZABLE SPLITTER ─── */
+  resizer: {
+    width: "5px",
+    cursor: "col-resize",
+    backgroundColor: C.divider,
+    zIndex: 10,
+    flexShrink: 0,
+    transition: "background-color 0.2s ease",
+    "&:hover, &:active": {
+      backgroundColor: C.greenAccent,
+      width: "6px",
+    },
+    [theme.breakpoints.down("sm")]: {
+      display: "none",
+    },
+  },
+
+  /* ─── RIGHT PANEL (CONVERSATION) ─── */
   rightPanel: {
     flex: 1,
     height: "100%",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: C.deepNavy,
+    backgroundColor: C.black,
     position: "relative",
+    minWidth: 0,
   },
   rightPanelHiddenMobile: {
     [theme.breakpoints.down("sm")]: {
@@ -269,7 +289,7 @@ const useStyles = makeStyles((theme) => ({
 
   rightHeader: {
     height: "60px",
-    backgroundColor: C.pureBlack,
+    backgroundColor: C.headerBg,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -290,12 +310,12 @@ const useStyles = makeStyles((theme) => ({
   rightHeaderName: {
     fontWeight: 600,
     fontSize: "1rem",
-    color: C.warmBeige,
+    color: C.textPrimary,
     lineHeight: "1.2",
   },
   rightHeaderStatus: {
     fontSize: "0.78rem",
-    color: C.goldAccent,
+    color: C.greenAccent,
     fontWeight: 500,
     display: "flex",
     alignItems: "center",
@@ -306,7 +326,7 @@ const useStyles = makeStyles((theme) => ({
     flex: 1,
     overflowY: "hidden",
     position: "relative",
-    backgroundColor: C.deepNavy,
+    backgroundColor: C.black,
   },
 
   /* ─── WELCOME SCREEN ─── */
@@ -317,32 +337,31 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: C.deepNavy,
-    borderBottom: `4px solid ${C.goldAccent}`,
+    backgroundColor: C.darkPanel,
+    borderBottom: `4px solid ${C.greenAccent}`,
     padding: "20px",
     textAlign: "center",
   },
   welcomeIconContainer: {
-    width: 100,
-    height: 100,
+    width: 90,
+    height: 90,
     borderRadius: "50%",
-    background: `linear-gradient(135deg, ${C.slateGray}, ${C.panelBg})`,
+    background: C.cardHover,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
-    boxShadow: `0 4px 20px rgba(0,0,0,0.3)`,
+    boxShadow: `0 4px 20px rgba(0,0,0,0.4)`,
   },
   welcomeTitle: {
     fontSize: "1.8rem",
     fontWeight: 300,
-    color: C.warmBeige,
+    color: C.textPrimary,
     marginBottom: "10px",
-    letterSpacing: "0.5px",
   },
   welcomeSubtitle: {
     fontSize: "0.92rem",
-    color: C.warmGray,
+    color: C.textSecondary,
     maxWidth: "480px",
     lineHeight: "1.6",
   },
@@ -351,7 +370,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: "6px",
     marginTop: "40px",
-    color: C.warmGray,
+    color: C.textSecondary,
     fontSize: "0.82rem",
   },
 
@@ -363,16 +382,47 @@ const useStyles = makeStyles((theme) => ({
   },
   emptyListMessage: {
     textAlign: "center",
-    color: C.warmGray,
+    color: C.textSecondary,
     padding: "40px 20px",
     fontSize: "0.9rem",
   },
 }));
 
+// Error Boundary component to protect against white screens
+class ChatErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("[ChatErrorBoundary] Caught error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#8696a0", padding: 20 }}>
+          <p>Ocurrió un error inesperado al renderizar este chat.</p>
+          <button
+            onClick={() => this.setState({ hasError: false })}
+            style={{ backgroundColor: "#00a884", color: "#111b21", border: "none", padding: "8px 18px", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}
+          >
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const formatMessageTime = (dateStr) => {
   if (!dateStr) return "";
   try {
-    const d = parseISO(dateStr);
+    const d = typeof dateStr === "string" ? parseISO(dateStr) : new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
     if (isToday(d)) return format(d, "HH:mm");
     if (isYesterday(d)) return "Ayer";
     return format(d, "dd/MM/yyyy");
@@ -382,17 +432,68 @@ const formatMessageTime = (dateStr) => {
 };
 
 const WhatsAppWebChat = () => {
-  const classes = useStyles();
-  const history = useHistory();
   const { ticketId } = useParams();
+  const history = useHistory();
   const { user } = useContext(AuthContext);
+
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem("anubis_chat_sidebar_width");
+    return saved ? Math.min(Math.max(Number(saved), 260), 650) : 380;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
+  const classes = useStyles({ isResizing });
 
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchParam, setSearchParam] = useState("");
   const [filter, setFilter] = useState("all");
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [profilePics, setProfilePics] = useState({});
 
+  // Fetch client profile picture dynamically
+  const fetchProfilePic = useCallback(async (contactId) => {
+    if (!contactId || profilePics[contactId]) return;
+    try {
+      const { data } = await api.get(`/contacts/${contactId}/profile-pic`);
+      if (data?.profilePicUrl) {
+        setProfilePics((prev) => ({ ...prev, [contactId]: data.profilePicUrl }));
+      }
+    } catch (e) {
+      // Ignore failure
+    }
+  }, [profilePics]);
+
+  // Resizable splitter logic
+  const startResize = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e) => {
+      // 48px is typical offset of left drawer icon if present
+      const newWidth = Math.min(Math.max(e.clientX - 56, 260), 650);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      localStorage.setItem("anubis_chat_sidebar_width", String(sidebarWidth));
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, sidebarWidth]);
+
+  // Fetch chat list
   useEffect(() => {
     let isMounted = true;
     const fetchChats = async () => {
@@ -429,6 +530,16 @@ const WhatsAppWebChat = () => {
     };
   }, [searchParam, filter]);
 
+  // Fetch missing profile pictures for visible contacts
+  useEffect(() => {
+    chats.slice(0, 30).forEach((chat) => {
+      if (chat.contact?.id && !chat.contact.profilePicUrl && !profilePics[chat.contact.id]) {
+        fetchProfilePic(chat.contact.id);
+      }
+    });
+  }, [chats, fetchProfilePic, profilePics]);
+
+  // Fetch selected ticket when URL changes
   useEffect(() => {
     let isMounted = true;
     if (!ticketId) {
@@ -440,10 +551,18 @@ const WhatsAppWebChat = () => {
       try {
         const { data } = await api.get(`/tickets/${ticketId}`);
         if (isMounted) {
+          // If the ticket is pending, automatically open/accept it so typing works immediately
+          if (data.status === "pending") {
+            api.put(`/tickets/${ticketId}`, { status: "open", userId: user?.id }).catch(() => {});
+            data.status = "open";
+          }
           setSelectedTicket(data);
           setChats((prev) =>
-            prev.map((c) => (c.id === Number(ticketId) ? { ...c, unreadMessages: 0 } : c))
+            prev.map((c) => (c.id === Number(ticketId) ? { ...c, unreadMessages: 0, status: "open" } : c))
           );
+          if (data.contact?.id && !data.contact.profilePicUrl) {
+            fetchProfilePic(data.contact.id);
+          }
         }
       } catch (err) {
         if (isMounted) setSelectedTicket(null);
@@ -455,8 +574,9 @@ const WhatsAppWebChat = () => {
     return () => {
       isMounted = false;
     };
-  }, [ticketId]);
+  }, [ticketId, user, fetchProfilePic]);
 
+  // Socket.io for real-time updates
   useEffect(() => {
     const socket = openSocket();
 
@@ -475,6 +595,14 @@ const WhatsAppWebChat = () => {
           }
           return [data.ticket, ...prev];
         });
+      }
+    });
+
+    socket.on("contact", (data) => {
+      if (data.action === "update" && data.contact?.id) {
+        if (data.contact.profilePicUrl) {
+          setProfilePics((prev) => ({ ...prev, [data.contact.id]: data.contact.profilePicUrl }));
+        }
       }
     });
 
@@ -507,6 +635,9 @@ const WhatsAppWebChat = () => {
   }, [ticketId]);
 
   const handleSelectChat = (chat) => {
+    if (chat.status === "pending") {
+      api.put(`/tickets/${chat.id}`, { status: "open", userId: user?.id }).catch(() => {});
+    }
     history.push(`/chats/${chat.id}`);
   };
 
@@ -515,192 +646,205 @@ const WhatsAppWebChat = () => {
   };
 
   return (
-    <div className={classes.mainContainer}>
-      <div
-        className={clsx(classes.leftPanel, {
-          [classes.leftPanelHiddenMobile]: Boolean(ticketId),
-        })}
-      >
-        {/* Header */}
-        <div className={classes.headerLeft}>
-          <Typography className={classes.headerLeftTitle}>
-            <WhatsAppIcon style={{ color: C.goldAccent, fontSize: 26 }} />
-            Chats
-          </Typography>
-          <span className={classes.headerBrand}>
-            Anubis Store
-          </span>
-        </div>
+    <ChatErrorBoundary>
+      <div className={classes.mainContainer}>
+        {/* ─── LEFT PANEL (CHAT LIST) ─── */}
+        <div
+          className={clsx(classes.leftPanel, {
+            [classes.leftPanelHiddenMobile]: Boolean(ticketId),
+          })}
+          style={{ width: `${sidebarWidth}px` }}
+        >
+          {/* Header */}
+          <div className={classes.headerLeft}>
+            <Typography className={classes.headerLeftTitle}>
+              <WhatsAppIcon style={{ color: C.greenAccent, fontSize: 26 }} />
+              Chats
+            </Typography>
+            <span className={classes.headerBrand}>
+              ANUBIS STORE
+            </span>
+          </div>
 
-        {/* Search */}
-        <div className={classes.searchContainer}>
-          <div className={classes.searchWrapper}>
-            <SearchIcon style={{ color: C.warmGray, fontSize: 20 }} />
-            <InputBase
-              className={classes.searchInput}
-              placeholder="Buscar o empezar un nuevo chat"
-              value={searchParam}
-              onChange={(e) => setSearchParam(e.target.value)}
-            />
+          {/* Search */}
+          <div className={classes.searchContainer}>
+            <div className={classes.searchWrapper}>
+              <SearchIcon style={{ color: C.textSecondary, fontSize: 20 }} />
+              <InputBase
+                className={classes.searchInput}
+                placeholder="Buscar o empezar un nuevo chat"
+                value={searchParam}
+                onChange={(e) => setSearchParam(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Filter Pills */}
+          <div className={classes.filterPills}>
+            {[
+              { key: "all", label: "Todos" },
+              { key: "unread", label: "No leídos" },
+              { key: "groups", label: "Grupos" },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={clsx(classes.pill, {
+                  [classes.pillActive]: filter === key,
+                })}
+                onClick={() => setFilter(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Chat List */}
+          <div className={classes.chatList}>
+            {loading ? (
+              <div className={classes.loadingContainer}>
+                <CircularProgress size={32} style={{ color: C.greenAccent }} />
+              </div>
+            ) : chats.length === 0 ? (
+              <div className={classes.emptyListMessage}>
+                No se encontraron chats que coincidan con la búsqueda.
+              </div>
+            ) : (
+              chats.map((chat) => {
+                const isSelected = Number(ticketId) === chat.id;
+                const contactName = chat.contact?.name || chat.contact?.number || "Contacto";
+                const avatarPic = profilePics[chat.contact?.id] || chat.contact?.profilePicUrl;
+
+                return (
+                  <div
+                    key={chat.id}
+                    className={clsx(classes.chatItem, {
+                      [classes.chatItemActive]: isSelected,
+                    })}
+                    onClick={() => handleSelectChat(chat)}
+                  >
+                    <Avatar
+                      src={avatarPic}
+                      className={classes.chatAvatar}
+                    >
+                      {contactName.charAt(0).toUpperCase()}
+                    </Avatar>
+                    <div className={classes.chatDetails}>
+                      <div className={classes.chatDetailsTop}>
+                        <Typography className={classes.chatName}>
+                          {contactName}
+                        </Typography>
+                        <Typography
+                          className={classes.chatTime}
+                          style={chat.unreadMessages > 0 ? { color: C.greenAccent, fontWeight: 600 } : {}}
+                        >
+                          {formatMessageTime(chat.updatedAt)}
+                        </Typography>
+                      </div>
+                      <div className={classes.chatDetailsBottom}>
+                        <Typography className={classes.chatMessageSnippet}>
+                          {chat.lastMessage || "Sin mensajes"}
+                        </Typography>
+                        {chat.unreadMessages > 0 && (
+                          <div className={classes.unreadBadge}>
+                            {chat.unreadMessages}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
-        {/* Filter Pills */}
-        <div className={classes.filterPills}>
-          {[
-            { key: "all", label: "Todos" },
-            { key: "unread", label: "No leídos" },
-            { key: "groups", label: "Grupos" },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              className={clsx(classes.pill, {
-                [classes.pillActive]: filter === key,
-              })}
-              onClick={() => setFilter(key)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* ─── RESIZABLE SPLITTER / DRAG HANDLE ─── */}
+        <div
+          className={classes.resizer}
+          onMouseDown={startResize}
+          onDoubleClick={() => setSidebarWidth(380)}
+          title="Arrastra para cambiar el ancho de la división (Doble clic para restablecer)"
+        />
 
-        {/* Chat List */}
-        <div className={classes.chatList}>
-          {loading ? (
-            <div className={classes.loadingContainer}>
-              <CircularProgress size={32} style={{ color: C.goldAccent }} />
-            </div>
-          ) : chats.length === 0 ? (
-            <div className={classes.emptyListMessage}>
-              No se encontraron chats que coincidan con la búsqueda.
-            </div>
-          ) : (
-            chats.map((chat) => {
-              const isSelected = Number(ticketId) === chat.id;
-              const contactName = chat.contact?.name || chat.contact?.number || "Contacto";
-
-              return (
-                <div
-                  key={chat.id}
-                  className={clsx(classes.chatItem, {
-                    [classes.chatItemActive]: isSelected,
-                  })}
-                  onClick={() => handleSelectChat(chat)}
-                >
-                  <Avatar
-                    src={chat.contact?.profilePicUrl}
-                    className={classes.chatAvatar}
+        {/* ─── RIGHT PANEL (CONVERSATION) ─── */}
+        <div
+          className={clsx(classes.rightPanel, {
+            [classes.rightPanelHiddenMobile]: !Boolean(ticketId),
+          })}
+        >
+          {selectedTicket ? (
+            <ReplyMessageProvider>
+              <div className={classes.rightHeader}>
+                <div className={classes.rightHeaderInfo}>
+                  <IconButton
+                    style={{ marginRight: 4, padding: 6 }}
+                    onClick={handleBackToChatList}
                   >
-                    {contactName.charAt(0).toUpperCase()}
+                    <ArrowBackIcon style={{ color: C.textSecondary }} />
+                  </IconButton>
+                  <Avatar
+                    src={profilePics[selectedTicket.contact?.id] || selectedTicket.contact?.profilePicUrl}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      backgroundColor: C.cardHover,
+                      color: C.textPrimary,
+                    }}
+                  >
+                    {(selectedTicket.contact?.name || "C").charAt(0).toUpperCase()}
                   </Avatar>
-                  <div className={classes.chatDetails}>
-                    <div className={classes.chatDetailsTop}>
-                      <Typography className={classes.chatName}>
-                        {contactName}
-                      </Typography>
-                      <Typography
-                        className={classes.chatTime}
-                        style={chat.unreadMessages > 0 ? { color: C.goldAccent } : {}}
-                      >
-                        {formatMessageTime(chat.updatedAt)}
-                      </Typography>
-                    </div>
-                    <div className={classes.chatDetailsBottom}>
-                      <Typography className={classes.chatMessageSnippet}>
-                        {chat.lastMessage || "Sin mensajes"}
-                      </Typography>
-                      {chat.unreadMessages > 0 && (
-                        <div className={classes.unreadBadge}>
-                          {chat.unreadMessages}
-                        </div>
-                      )}
-                    </div>
+                  <div className={classes.rightHeaderTexts}>
+                    <Typography className={classes.rightHeaderName}>
+                      {selectedTicket.contact?.name || selectedTicket.contact?.number}
+                    </Typography>
+                    <Typography className={classes.rightHeaderStatus}>
+                      <span style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        backgroundColor: C.greenAccent,
+                        display: "inline-block",
+                      }} />
+                      {selectedTicket.contact?.number
+                        ? `+${selectedTicket.contact.number} • Conectado`
+                        : "En línea"}
+                    </Typography>
                   </div>
                 </div>
-              );
-            })
+              </div>
+
+              <div className={classes.messagesArea}>
+                <MessagesList
+                  ticketId={selectedTicket.id}
+                  isGroup={selectedTicket.isGroup}
+                />
+              </div>
+
+              {/* MessageInput is always open to allow immediate typing like WhatsApp Desktop */}
+              <MessageInput ticketStatus="open" />
+            </ReplyMessageProvider>
+          ) : (
+            <div className={classes.welcomeScreen}>
+              <div className={classes.welcomeIconContainer}>
+                <WhatsAppIcon style={{ fontSize: 50, color: C.greenAccent }} />
+              </div>
+              <Typography className={classes.welcomeTitle}>
+                WhatsApp Desktop • Anubis Store
+              </Typography>
+              <Typography className={classes.welcomeSubtitle}>
+                Envía y recibe mensajes, fotos, notas de voz y documentos en tiempo real.
+                Las notificaciones se sincronizan automáticamente con tu WhatsApp nativo.
+              </Typography>
+              <div className={classes.welcomeFooter}>
+                <LockIcon style={{ fontSize: 16 }} />
+                <span>Cifrado de extremo a extremo activo</span>
+              </div>
+            </div>
           )}
         </div>
       </div>
-
-      {/* ─── RIGHT PANEL ─── */}
-      <div
-        className={clsx(classes.rightPanel, {
-          [classes.rightPanelHiddenMobile]: !Boolean(ticketId),
-        })}
-      >
-        {selectedTicket ? (
-          <ReplyMessageProvider>
-            <div className={classes.rightHeader}>
-              <div className={classes.rightHeaderInfo}>
-                <IconButton
-                  style={{ marginRight: 4, padding: 6 }}
-                  onClick={handleBackToChatList}
-                >
-                  <ArrowBackIcon style={{ color: C.warmGray }} />
-                </IconButton>
-                <Avatar
-                  src={selectedTicket.contact?.profilePicUrl}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    backgroundColor: C.slateGray,
-                    color: C.warmBeige,
-                    border: `2px solid ${C.divider}`,
-                  }}
-                >
-                  {(selectedTicket.contact?.name || "C").charAt(0).toUpperCase()}
-                </Avatar>
-                <div className={classes.rightHeaderTexts}>
-                  <Typography className={classes.rightHeaderName}>
-                    {selectedTicket.contact?.name || selectedTicket.contact?.number}
-                  </Typography>
-                  <Typography className={classes.rightHeaderStatus}>
-                    <span style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      backgroundColor: C.goldAccent,
-                      display: "inline-block",
-                    }} />
-                    {selectedTicket.contact?.number
-                      ? `+${selectedTicket.contact.number} • Conectado`
-                      : "En línea"}
-                  </Typography>
-                </div>
-              </div>
-            </div>
-
-            <div className={classes.messagesArea}>
-              <MessagesList
-                ticketId={selectedTicket.id}
-                isGroup={selectedTicket.isGroup}
-              />
-            </div>
-
-            <MessageInput ticketStatus={selectedTicket.status || "open"} />
-          </ReplyMessageProvider>
-        ) : (
-          <div className={classes.welcomeScreen}>
-            <div className={classes.welcomeIconContainer}>
-              <WhatsAppIcon style={{ fontSize: 56, color: C.goldAccent }} />
-            </div>
-            <Typography className={classes.welcomeTitle}>
-              Anubis Store
-            </Typography>
-            <Typography className={classes.welcomeSubtitle}>
-              Envía y recibe mensajes, fotos, notas de voz y documentos en tiempo real.
-              Las notificaciones se sincronizan automáticamente con tu WhatsApp.
-            </Typography>
-            <div className={classes.welcomeFooter}>
-              <LockIcon style={{ fontSize: 16 }} />
-              <span>Cifrado de extremo a extremo activo</span>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    </ChatErrorBoundary>
   );
 };
 
