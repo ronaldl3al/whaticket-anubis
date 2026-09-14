@@ -44,6 +44,7 @@ const evolutionFetch = async (
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     apikey: apiKey,
+    "api-key": apiKey,
     ...(options.headers || {})
   };
 
@@ -360,7 +361,10 @@ export const EvolutionApiProvider: WhatsappProvider = {
     logger.info(`[EVOLUTION] Querying chats and contacts for instance ${instanceName}`);
 
     // 1. Fetch Chats (where chat names like cliente0000 exist)
-    const chatsRes = await evolutionFetch(`/chat/findChats/${instanceName}`);
+    let chatsRes = await evolutionFetch(`/chat/findChats/${instanceName}`);
+    if (!chatsRes.ok) {
+      chatsRes = await evolutionFetch(`/chat/findChats/${instanceName}`, { method: "POST", body: {} });
+    }
     const chatsList = Array.isArray(chatsRes.data)
       ? chatsRes.data
       : (chatsRes.data?.chats || chatsRes.data?.data || []);
@@ -393,7 +397,10 @@ export const EvolutionApiProvider: WhatsappProvider = {
     }
 
     // 2. Fetch Contacts
-    const contactsRes = await evolutionFetch(`/contact/findContact/${instanceName}`);
+    let contactsRes = await evolutionFetch(`/contact/findContact/${instanceName}`);
+    if (!contactsRes.ok) {
+      contactsRes = await evolutionFetch(`/contact/findContact/${instanceName}`, { method: "POST", body: {} });
+    }
     const contactsList = Array.isArray(contactsRes.data)
       ? contactsRes.data
       : (contactsRes.data?.contacts || contactsRes.data?.data || []);
